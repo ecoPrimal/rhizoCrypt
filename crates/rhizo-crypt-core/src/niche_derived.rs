@@ -298,14 +298,21 @@ pub fn normalize_method(method: &str) -> &str {
     if let Some(stripped) =
         method.strip_prefix("rhizocrypt.").or_else(|| method.strip_prefix("rhizo_crypt."))
     {
+        LEGACY_PREFIX_HITS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         return stripped;
     }
 
-    PROVENANCE_ALIASES
-        .iter()
-        .find(|(alias, _)| *alias == method)
-        .map_or(method, |(_, canonical)| canonical)
+    if let Some((_, canonical)) = PROVENANCE_ALIASES.iter().find(|(alias, _)| *alias == method) {
+        LEGACY_PREFIX_HITS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        return canonical;
+    }
+
+    method
 }
+
+/// Count of JSON-RPC calls that arrived with a legacy prefix or alias.
+pub static LEGACY_PREFIX_HITS: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
 
 /// Liveness probe (HEALTH-01 contract: `status`, `primal`, `version`, `uptime_s`).
 #[must_use]

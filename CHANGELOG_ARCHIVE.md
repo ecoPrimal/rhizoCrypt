@@ -1,0 +1,2770 @@
+# Changelog
+
+All notable changes to rhizoCrypt will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.14.17] - 2026-06-16
+
+### Wave 157k — Deep Interstadial: rootPulse Activation + Deep Debt (Aug 14, 2026)
+- **rootPulse step handlers**: implement `rootpulse.record_build` (harvest graph) and `rootpulse.dehydrate_state` (commit graph) — biomeOS trio graph activation for rhizoCrypt
+- **Semantic aliases**: `dag.append` → `dag.event.append`, `dehydrate` / `dehydration.execute` → `dag.dehydration.trigger` — registered in handler dispatch + `PROVENANCE_ALIASES` + `primal.announce`
+- **Zero-copy vertex hot path**: `canonical_bytes` cache on `Vertex`, `BytesMut::freeze()` for CBOR encoding, `resolved_id()` + `with_known_id()` to skip re-hashing on store reads
+- **BTSP wire types activated**: `ServerHello.version` validated, `server_ephemeral_pub` stored on session, `HandshakeError.error` logged — zero dead code
+- **Hardcoded port elimination**: RPC integration tests + binary integration tests evolved to port-0 (OS-assigned) — zero CI collision risk
+- **Capability-based comments**: ~30 hardcoded primal name references in production comments → capability-based language
+- **Clippy suppressions evolved**: all `#[allow]` → `#[expect]` in production code, zero production `#[allow]` remaining
+- **Coverage improvement**: new tests for `shutdown.rs` (SIGTERM/SIGINT), `client.rs` (error paths), `neural_api.rs` (announce lifecycle)
+- **Songbird docs fix**: removed contradictory "localhost fallback" references in client + connection
+- **Metrics removed**: `LATENCY_BUCKETS` re-export eliminated (unused downstream)
+- Registry: 42 methods across 8 domains (was 40/7). Deploy graph updated. `CONTRIBUTING.md` added.
+- Tests: 1,858, 231 `.rs` files, ~62,620 lines, 92.69% line coverage
+
+### Deep Debt Sweep — Code Evolution (Aug 10, 2026)
+- **P0 — Extract `build_signed_vertex()`**: eliminate 4× duplicated vertex builder in `service_vertex_ops.rs` (~60 lines removed)
+- **P0 — Standardize handlers on `impl_*`**: branch handlers (`dispatch_branch`, `dispatch_diff`, `dispatch_merge`, `dispatch_federate`) now call `impl_*` directly, bypassing tarpc self-clone + context overhead
+- **P1 — Zero-copy federate**: `dispatch_federate` consumes `Value::Array` via `into_iter()` instead of cloning each vertex `Value`
+- **P1 — PresenceVerifier doc**: update stale "pre-JH-11 placeholder" doc → accurate description as permissive-mode degradation fallback
+- **P2 — `#[inline]` hot paths**: add `#[inline]` to `MerkleRoot::compute`, `MerkleProof::verify` (dehydration/verification hot paths)
+- **P2 — Test split**: split `method_gate_tests.rs` (856L) into 3 focused modules: `classification`, `verifier_tests`, `gate` + shared helpers. No file >800L.
+- **Survey results**: zero `unsafe` in production, zero mocks outside `cfg(test|test-utils)`, zero hardcoded IPs in production, zero stubs/placeholders
+- Tests: 1,832, 229 `.rs` files, ~61,850 lines
+
+### Wave 157g — G72 Dependency Pandemic Tier 1 (Aug 10, 2026)
+- **G72 dep audit**: systematic dependency review — tokio features already explicit (no `"full"`), tarpc features already explicit
+- **Dead dep removal**: remove `wiremock` (dev-dep, 0 usage) — cascades to **46 crates removed** (14.6% reduction: 316 → 270 unique deps)
+- Removed transitive chain: wiremock → url → idna → icu_* → deadpool → indexmap → h2 → hashbrown duplicate
+- **Patch alignment**: `cargo update` bumps 6 crates to latest patch (async-trait, cc, thiserror, wasm-bindgen, etc.)
+- **hashbrown duplicate resolved**: was 0.14.5 (dashmap) + 0.17.1 (indexmap→h2→wiremock). Now only 0.14.5.
+- Remaining duplicates all transitive: cpufeatures (crypto), getrandom/rand (0.8→0.9 Tier 2), syn (proc-macro)
+- `cargo deny check` clean: advisories ok, bans ok, licenses ok, sources ok
+- Tests: 1,835, 226 `.rs` files, ~61,800 lines
+
+### Wave 157e — Gossip Injection Points (Aug 10, 2026)
+- **Gossip mesh integration**: implement swarmVine gossip emission at 3 DAG lifecycle injection points
+- Add `GossipEmitter` + `GossipEvent` types in `types_ecosystem/gossip/` — follows `ProvenanceNotifier` pattern
+- Add `Capability::GossipRelay` variant for runtime discovery of any `gossip:relay` provider
+- **Injection point 1**: `dehydrate()` → `SessionDehydrated` (session_id, merkle_root, vertex_count)
+- **Injection point 2**: `dehydrate_batch()` → `BatchDehydrated` (session_count, session_ids)
+- **Injection point 3**: `impl_federate()` → `Federated` (session_id, imported_count, source_gate)
+- Wire `GossipEmitter` into `RhizoCrypt` struct + `PrimalLifecycle::start()` connect (non-fatal)
+- `GOSSIP_RELAY_ENDPOINT` env var for direct endpoint configuration
+- `gossip.spread` JSON-RPC wire method with `{ source_primal, domain, event }` payload
+- 10 new tests: event serialization roundtrips, emitter lifecycle, env-based connect, no-server resilience
+- Tests: 1,835, 226 `.rs` files, ~61,800 lines
+
+### Wave 157a — Vertebrate Self-Audit (Aug 9, 2026)
+- **RPC surface self-audit**: 3-way comparison — capability_registry.toml vs METHOD_CATALOG vs handler dispatch
+- **Fix**: add missing `dag.session.tree_hash` to capability_registry.toml — was implemented (handler + tarpc + METHOD_CATALOG) but undeclared in registry
+- **Fix**: remove phantom `lifecycle.status` from method_gate PUBLIC_METHODS and BTSP-exempt allowlist — had no handler dispatch (returned `-32601 Method not found`), classic phantom API (exactly the pattern westGate flagged)
+- Registry now declares **40 methods** = METHOD_CATALOG (40) = handler dispatch (40). Zero phantoms, zero gaps.
+- Tests: 1,825, 223 `.rs` files, ~61,400 lines
+
+### Wave 157a — G68 Platform Substrate Convergence (Aug 7, 2026)
+- **G68 L1 fix**: add `platform_link()` + `is_symlink_to()` to `transport/platform.rs` — replace all raw `std::os::unix::fs::symlink` calls in production (`uds/symlinks.rs`) and tests (`uds_tests.rs`, `uds_tests_errors.rs`)
+- **G68 L2 fix**: add `PlatformAccess` enum + `set_platform_permissions()` — replace raw `PermissionsExt`/`from_mode()` in `store_redb_tests_error_paths.rs`
+- **G68 L3**: zero violations (no `rustix`, `libc`, `mmap`, `ioctl`, `VFIO`, `DRM`)
+- All raw platform APIs now confined to `transport/platform.rs` — callers use abstractions
+- **Transport module refactor**: split 697-line `transport.rs` monolith into `transport/` module directory — `mod.rs` (195), `endpoint.rs` (197), `connect.rs` (148), `listener.rs` (95), `stream.rs` (90), `platform.rs` (96)
+- **cargo fmt**: fix G66 formatting drift
+- Tests: 1,825, 223 `.rs` files, ~61,400 lines
+
+### Wave 156s — G66 Transport Abstraction (Aug 6, 2026)
+- **G66 transport abstraction**: eliminate silicon deism — all IPC operates on transport-agnostic streams
+- Add `TransportListener` (G66) — server-side transport abstraction with `bind()` and `accept()` for UDS/TCP
+- Add `TransportEndpoint::platform_default()` — UDS on Unix, TCP localhost on non-Unix
+- Add `TransportEndpoint::from_env_or_default()` — `TRANSPORT_ENDPOINT` JSON env injection (G66 transport injection)
+- Add `TransportEndpoint::is_local()` — G63 local-trust integration (UDS/localhost detection)
+- Add `TransportStream::is_local()` + `supports_peer_cred()` — runtime transport capability queries
+- Genericize G65 `try_negotiate()` + `negotiate_client()`: now `S: AsyncRead + AsyncWrite + Unpin` (was `UnixStream`)
+- Genericize `serve_tarpc_on_stream()`: `S: AsyncRead + AsyncWrite + Unpin + Send + 'static`
+- Add `RpcClient::connect_negotiated_transport()` — G65+G66 composed: negotiate protocol on any `TransportEndpoint`
+- Move UDS stream tests behind `#[cfg(unix)]`; add TCP-based negotiation test (platform-agnostic proof)
+- `cargo check --target x86_64-pc-windows-gnu` passes: zero silicon deism in protocol negotiation
+- 18 new tests: `is_local` (UDS, IPv4, IPv6, hostname, remote, mesh), `platform_default`, `from_env_or_default` (JSON, address, fallback), `TransportStream` capability queries, `TransportListener` (TCP accept, UDS bind+accept, TCP bind, mesh fail, debug)
+- Tests: 1,825, 218 `.rs` files, ~61,200 lines
+
+### Wave 156m — G65 Protocol Negotiation (Aug 6, 2026)
+- **G65 protocol negotiation**: single-socket protocol selection replaces C2 dual-socket (`PROTOCOLS: tarpc,jsonrpc\n` → `PROTOCOL: tarpc\n`)
+- Add `protocol_negotiation` module with `IpcProtocol` enum, wire format parser, and client/server negotiation functions
+- Integrate into `handle_uds_connection`: check for `PROTOCOLS:` before BTSP/mito-beacon detection
+- Add `serve_tarpc_on_stream()` — serves tarpc binary (bincode + length-delimited) on an already-connected UDS stream
+- Add `RpcClient::connect_negotiated()` — G65 client: negotiate protocol then upgrade to tarpc binary framing
+- Extract `extract_peer_caller()` and `dispatch_g65()` helpers to keep `handle_uds_connection` under 100-line clippy limit
+- Add `tokio-serde` + `tokio-util` workspace dependencies for direct transport framing
+- Backward-compatible: no negotiation = JSON-RPC (existing clients work unchanged)
+- 13 new tests: wire name roundtrip, protocol selection, parse/format, negotiation roundtrip (tarpc, jsonrpc, not-negotiation, with-leftover), 4 E2E (tarpc, jsonrpc, backward compat, tarpc+session ops)
+- Tests: 1,807, 217 `.rs` files, ~60,800 lines
+
+### Wave 156j — G64 C2 Dual-Socket Pattern (Aug 6, 2026)
+- **G64 C2 dual-socket**: add tarpc binary UDS listener on `{primal}.tarpc.sock` alongside JSON-RPC on `{primal}.sock`
+- Add `TarpcUdsServer` in `rhizo-crypt-rpc` — mirrors `RpcServer` (TCP) but over `tarpc::serde_transport::unix`
+- Enable tarpc `unix` feature in workspace `Cargo.toml`
+- Add `TARPC_SOCKET_FILE_EXTENSION` (`.tarpc.sock`) constant + `family_scoped_tarpc_socket_path()` helper
+- Add `default_tarpc_socket_path()` for ecosystem-standard path resolution
+- Add `RpcClient::connect_uds()` for sub-ms intra-gate tarpc binary composition over UDS
+- Wire both listeners into service startup: `start_uds_listener` now spawns JSON-RPC + tarpc UDS, returns dual shutdown senders
+- Add `resolve_tarpc_uds_path()` to derive tarpc socket path from JSON-RPC path
+- 3 new tests: socket path validation, tarpc UDS roundtrip, multi-operation tarpc UDS session
+- Tests: 1,794, 215 `.rs` files, ~60,000 lines
+
+### Wave 156e — G63 BTSP Local-Trust via SO_PEERCRED (Aug 4, 2026)
+- **G63 SO_PEERCRED**: extract kernel-verified peer credentials (UID/GID/PID) from every UDS connection via `UnixStream::peer_cred()`
+- Add `PeerCredentials` struct to `CallerContext` — kernel-verified identity without BTSP key exchange
+- Add `CallerContext::unix_with_peer()` and `btsp_authenticated_with_peer()` constructors
+- Wire peer credential extraction at `handle_uds_connection` accept time, propagated through BTSP handshake paths
+- `auth.peer_info` response now includes `peer_uid`, `peer_gid`, `peer_pid` when available
+- Preserve `peer_cred` through `process_single_request` (was dropped during per-request `CallerContext` rebuild)
+- Add `btsp_caller_with_peer()` helper (const fn) for BTSP paths to carry peer creds
+- 6 new tests: `PeerCredentials` struct tests, `auth.peer_info` with/without peer creds, E2E UDS peer cred verification
+- Tests: 1,791, 214 `.rs` files, ~59,700 lines
+
+### Wave 156c — RPC Integration Port Isolation + Deep Debt Gate (Aug 4, 2026)
+- Fix RPC integration test port collision: live `rhizocrypt` on port 19501 caused `test_rpc_server_client_connection` to connect to wrong server (BTSP-enforcing gate instance)
+- Remap all 10 tarpc integration test ports from 195xx/196xx → 197xx range to avoid gate service port conflicts
+- Add `BTSP_CLEAR_ENV` + `temp_env::with_vars` isolation to all tarpc integration tests (same pattern as UDS/service tests)
+- Convert 10 tarpc tests from `#[tokio::test]` to `#[test]` + manual runtime for reliable environment isolation
+- `cargo update`: regex-automata 0.4.16 → 0.4.17
+- Full deep debt gate: zero clippy warnings, fmt clean, cargo deny clean, 0 unsafe blocks, 0 debt markers, 0 hardcoded values, all mocks test-gated, cross-compile clean (windows-gnu, musl)
+- Tests: 1,785, 214 `.rs` files, ~59,500 lines
+
+### Wave 156b — Batch Notify Wire + Dead Code Purge (Aug 4, 2026)
+- **Wire `notify_dehydration_batch`** into `dehydrate_batch()`: N sessions → 1 sweetGrass RPC (was N per-session RPCs)
+- Extract `dehydrate_core()` private method: dehydration pipeline without notification, enables batch callers to collect summaries before batch-notifying
+- Add `dehydrate_batch()` + `pipeline_ingest()` to high-level `RpcClient` (tarpc typed)
+- Deploy graph: add `dag.dehydration.trigger_batch`, `dag.pipeline.ingest`, `dag.partial_dehydrate` capabilities
+- MCP tools: add `dag.event.append_batch`, `dag.dehydration.trigger_batch`, `dag.pipeline.ingest` tool schemas
+- **Dead vendor HTTP purge**: remove 5 unused vendor-specific HTTP/RPC modules (beardog_http, nestgate_http, toadstool_http, loamspine_http, loamspine_rpc) — 11 files, ~4,100 lines, 132 tests that tested code with zero production callers
+- Tests: 1,782 (-132 dead vendor), 214 `.rs` files (-11), ~59,500 lines (-4,000)
+
+### Wave 155n — Deep Debt + BTSP Test Isolation (Aug 3, 2026)
+- Fix 12 pre-existing test failures: UDS and service lifecycle tests leaked `FAMILY_ID` from gate env
+- Root cause: production `FAMILY_ID=e8b62b6e` set on eastGate caused listener to enforce BTSP, rejecting plain JSON-RPC connections in tests
+- All `temp_env::with_vars` blocks in service lifecycle and startup tests now clear `FAMILY_ID` / `RHIZOCRYPT_FAMILY_ID`
+- UDS roundtrip tests converted to socket-pair pattern (env-independent, matching uds_tests_errors.rs pattern)
+- Integration tests converted to `#[test]` + manual runtime + `temp_env::with_vars(BTSP_CLEAR_ENV)` for listener-based tests
+- `cargo update`: 7 deps to latest patches (aho-corasick, clap, enum-ordinalize, http, tokio-macros)
+- `cargo clippy --pedantic`: zero warnings (full sweep including nursery lints)
+- `#[allow]` audit: 11 `#[allow]` + 7 prod `#[expect]` all verified with reason strings
+- Debt markers: zero TODO/FIXME/HACK/STUB/PLACEHOLDER in `.rs` files
+- Hardcoding: zero hardcoded IPs/ports/primal names in production code
+- Mocks: all mock impls gated behind `#[cfg(test)]` or `test-utils` feature
+- External deps: only C dep is `libc` (tokio/signal-hook-registry, unavoidable); crypto stack pure Rust; `cargo deny` CLEAN
+- Tests: 1,914, 225 `.rs` files, ~63,520 lines
+
+### Wave 155n — G31 Batch Provenance Pipeline (Aug 3, 2026)
+- `append_vertices_batch()`: single-lock batch append for N vertices (10× less lock contention)
+- `dehydrate_batch()`: concurrent multi-session dehydration via JoinSet (per-session error isolation)
+- `dag.dehydration.trigger_batch`: JSON-RPC + tarpc for multi-session batch dehydration
+- `dag.pipeline.ingest`: coordinated create + batch append + optional dehydrate in one RPC call
+- `notify_dehydration_batch()`: single JSON-RPC with array of summaries to sweetGrass (N→1)
+- `append_batch` RPC auto-routes to `append_vertices_batch` when all events target same session
+- 2 new methods in METHOD_CATALOG (39 total), 2 new capabilities, provenance wire aliases
+- Tests: 1,914 (+14), 225 `.rs` files, ~63,410 lines
+
+### Wave 155i — Cross-Compile Hygiene + NUCLEUS Readiness (Jul 29, 2026)
+- Zero-warning cross-compile for all 4 genomeBin targets: x86_64-linux, x86_64-windows-gnu, x86_64-linux-musl, aarch64-linux-musl
+- Fix unused `tracing::{info, warn}` imports on Windows (discovery.rs, shutdown.rs — gated behind `#[cfg(unix)]`)
+- Fix unused_mut warning on Windows: `cfg_attr(not(unix), allow(unused_mut))` on transport.rs stream (mut needed for BTSP handshake on Unix)
+- Add `--bind` as visible alias for `--host` CLI flag (forward-compatible with ecosystem CLI standardization P2)
+- NUCLEUS readiness verified: Neural API announce, capability manifest, biomeOS integration surface all clean
+- Tests: 1,900, 225 `.rs` files, ~62,665 lines
+
+### Wave 155d — Dep Hygiene + Test Consolidation (Jul 28, 2026)
+- `cargo update`: all workspace deps to latest compatible patches (zeroize 1.9, zerocopy 0.8.55, hyper 1.11, axum 0.7.9)
+- `cargo deny`: CLEAN — no advisories, bans, or license violations
+- Consolidate BTSP origin identity tests → `method_gate_tests.rs` trimmed 803→799 lines (under 800L limit)
+- Tests: 1,900, 225 `.rs` files, ~62,665 lines
+
+### Wave 155b — Cross-Gate Provenance Chain (Jul 27, 2026)
+- Wire federate → sweetGrass provenance push: `notify_provenance()` now called after successful federation
+- Build `ProvenanceChain` from imported vertices with `VertexRef` entries for each federated vertex
+- Expose `provenance_notifier()` getter on `RhizoCrypt` — notifier now accessible from RPC layer
+- Enrich dehydration with gateway-tier witnesses: `collect_gateway_witnesses()` scans for `source_gate` metadata
+- New `notify_dehydration_enriched()` on `ProvenanceNotifier` — appends `tier: "gateway"` witnesses to wire summary
+- `WireWitnessRef` entries with `kind: "federation"`, `context: "federated:<gate>"` for cross-gate content
+- 8 new tests (provenance chain building, gateway witnesses, enriched dehydration, notifier accessibility)
+- Tests: 1,901 (+8), 225 `.rs` files, ~62,665 lines
+
+### Wave 155b — BTSP-DAG Bridge + Federate Hardening (Jul 27, 2026)
+- Bridge BTSP transport auth into DAG authorization: new `ConnectionOrigin::BtspAuthenticated`
+- BTSP-authenticated callers auto-granted all method scopes (family membership = DAG access)
+- `CallerContext::btsp_authenticated()` constructor; all post-handshake paths propagate identity
+- Mesh poller now signs trust event vertices via `SigningClient` when available
+- Federate hardening: `verify_signatures` flag for vertex signature verification on import
+- Cross-repo provenance: `source_gate` metadata stamped on federated vertices
+- `FederateResponse.rejected` field for invalid-signature vertex count
+- 10 new tests (BTSP bridge, federate source_gate, verify_signatures, rejected field)
+- Tests: 1,893 (+10), 225 `.rs` files, ~62,282 lines
+
+### Wave 151b — BTSP Client-Side Handshake (Jul 26, 2026)
+- Implement BTSP `ClientHello` 4-step handshake for outbound bearDog UDS connections
+- New `btsp_client` module: `perform_client_handshake()`, `BtspClientSession`, `BtspClientError`
+- New `BtspUnixAdapter`: NDJSON JSON-RPC over BTSP-authenticated UDS connections
+- `AdapterFactory::from_transport()` auto-selects BTSP adapter when `BEARDOG_UDS_REQUIRE_BTSP=1`
+- Strict-mode detection: `btsp_strict_mode_expected()` checks `BEARDOG_UDS_REQUIRE_BTSP` / `BTSP_STRICT_MODE`
+- Family seed resolution: `RHIZOCRYPT_FAMILY_SEED` → `FAMILY_SEED` → `BEARDOG_FAMILY_SEED`
+- Fix BTSP in `send_jsonrpc_request` to fail-closed (error, not warn+proceed)
+- Add `hmac`, `sha2`, `getrandom` to `rhizo-crypt-core` dependencies
+- 6 new tests (handshake wire types, HMAC, strict-mode env, adapter lifecycle)
+- Tests: 1,886 (+8), 225 `.rs` files, ~61,967 lines
+
+### Wave 149b — Deprecation Purge + Dead Code Removal + Architecture Splits (Jul 18, 2026)
+- Fix RUSTSEC-2026-0204: update crossbeam-epoch 0.9.18→0.9.20 (dev-only)
+- Delete deprecated API surface: `with_endpoint`, `AdapterFactory::create`, `SongbirdClient`/`SongbirdConfig` aliases, `READ_TIMEOUT`/`WRITE_TIMEOUT`
+- Delete unused `CircuitBreaker`/`RetryPolicy` (dead code since introduction)
+- Split `uds.rs` (623L) → `uds/` module (mod.rs 229L + connection.rs 361L + symlinks.rs 53L)
+- Split `lib.rs` (622L) → 7 modules (lib.rs 126L + startup.rs 290L + discovery.rs + client.rs + uds.rs + config.rs + shutdown.rs)
+- Migrate deprecated constructor tests to `discover()` pattern
+- Coverage: 93.83%
+
+### Wave 143b — SessionTreeHash L5 Full Wire + Transport Cleanup (Jul 16, 2026)
+- Wire `SessionTreeHash` through full RPC stack (tarpc + JSON-RPC + DashMap cache)
+- Register `dag.session.tree_hash` in METHOD_CATALOG, MCP tools, method gate
+- Delete deprecated `TransportHint` + `preferred_transport` (dead code removal)
+- Deprecate `AdapterFactory::create(&str)` and `with_endpoint(&str)` on 5 capability clients
+- Add 3 new tests (RPC handler, client transport, method classification)
+- Coverage: 93.86% (+0.16%)
+
+#### Wave 142b-2: Integration Trait Wiring + Legacy Deprecation (Jul 16, 2026)
+
+- **Integration trait wiring (P0 architectural debt)**: `SigningClient` now implements `SigningProvider` (6 methods), `StorageClient` implements `PayloadStorageProvider` (3 methods), `PermanentStorageClient` implements `PermanentStorageProvider` (5 methods). All delegate to existing adapter-based methods. Enables `dyn` dispatch and mock injection for production paths.
+- **Dead constant deprecation**: `READ_TIMEOUT` and `WRITE_TIMEOUT` in `ipc.rs` marked `#[deprecated]` — unused by any adapter; will be removed in 0.14.18.
+- **`TransportHint` deprecation**: Legacy `TransportHint` enum and `preferred_transport()` function deprecated in favor of `TransportEndpoint` + `AdapterFactory::from_transport()`.
+- **Visibility narrowing**: Vendor HTTP wire types (`beardog_http.rs`, `nestgate_http.rs`, `toadstool_http.rs`, `loamspine_rpc.rs`) narrowed from `pub` to `pub(crate)` — all are internal DTOs, not part of the public API.
+
+#### Wave 142b: Transport Phase 2 + SessionTreeHash + Clone Optimization (Jul 16, 2026)
+
+- **`AdapterFactory::from_transport(TransportEndpoint)`**: New structured dispatch method eliminates the `Display` → re-parse round-trip in capability clients. All 5 discovery-based clients (signing, permanent, storage, compute, provenance) now create adapters directly from `TransportEndpoint` instead of string intermediaries.
+- **`SessionTreeHash` newtype (CAC primitive)**: Content-addressable cache key wrapping `MerkleRoot` for entire session DAG state. `RhizoCrypt::session_tree_hash()` computes the fingerprint. Enables duplicate detection and cache keying without full vertex comparison.
+- **Clone optimization**: `service_branch_ops.rs` destructures `MergeRequest` to iterate metadata by value, eliminating unnecessary `String` clones on the merge hot path.
+- **Test count 1,911 → 1,919 (+8)**: 4 adapter `from_transport` tests + 4 `SessionTreeHash` tests.
+
+#### Wave 141b: Architecture Split + Magic Numbers + Branch/Vertex Coverage (Jul 15, 2026)
+
+- **method_gate.rs split (790L → 468L + 334L)**: Extracted `CapabilityVerifier`, `TokenVerifier` trait, `PresenceVerifier`, `NoopVerifier`, and supporting types/functions into `method_gate_verifier.rs`. Public API unchanged via `pub use verifier::*`.
+- **Magic numbers → named constants**: 5 production magic numbers replaced with `constants::*` — `DEFAULT_PROVENANCE_CACHE_TTL_SECS` (300), `PROMETHEUS_BUFFER_CAPACITY` (4096), `DEFAULT_RATE_LIMIT_DEV_{READ,WRITE,EXPENSIVE}_RPS` (10k/1k/100). `DEFAULT_EVENT_BUFFER_SIZE` already existed (reused).
+- **permanent.rs inline test extraction (650L → 260L)**: 22 tests + 5 test-only DTOs moved to `permanent_tests.rs`.
+- **provenance/client.rs inline test extraction (589L → 268L)**: 17 tests moved to `client_tests.rs`.
+- **Branch/vertex core-layer tests (+17)**: New `rhizocrypt_tests_branch_vertex.rs` with 11 branch_ops tests (branch, diff, merge, federate paths) and 6 vertex_ops tests (query filters, limit, merkle root/proof).
+- **Test count 1,894 → 1,911 (+17)**. Zero files over 800L. Zero clippy warnings.
+
+#### Wave 133e-b: Vendor Decoupling + Transport Split + Niche Coverage (Jul 7, 2026)
+
+- **Songbird → DiscoveryClient decoupling**: `SongbirdClient` → `DiscoveryClient`, `SongbirdConfig` → `DiscoveryConfig`, `SongbirdRpc` → `DiscoveryRpc`, `MockSongbirdServer` → `MockDiscoveryServer`. Deprecated type aliases added for backward compat. Module docs updated to capability-neutral language. `songbird_rpc`/`songbird_types` re-exported as `discovery_rpc`/`discovery_types` via `#[path]`.
+- **Vendor HTTP client type renames**: `BearDogHttpClient` → `SigningHttpClient`, `ToadStoolHttpClient` → `ComputeHttpClient`, `NestGateHttpClient` → `StorageHttpClient`, `LoamSpineHttpClient` → `PermanentHttpClient`, `LoamSpineRpc` → `PermanentStorageRpc`. All error types renamed accordingly.
+- **`transport_tests.rs` split (823L → 6 submodules)**: Socket paths, platform hints, family/BTSP, endpoint, connect/liveness, error display — each in a focused file under `transport_tests/`.
+- **Niche derived coverage (+25 tests)**: `normalize_method`, `cost_tier`, `health_liveness`, `health_readiness`, `identity_get`, `announce_payload`, `mcp_tools`, `capability_list`, `method_locality_counts`, `SEMANTIC_MAPPINGS`, `CONSUMED_CAPABILITIES`, `DEPENDENCIES`.
+- **Test count 1,869 → 1,894 (+25)**. Zero files over 800L. Zero clippy warnings.
+
+#### Wave 128c: Fail-Closed Auth + Mesh Hardening + Constants Split (Jun 28, 2026)
+
+- **CapabilityVerifier fail-closed in Enforced mode**: `fail_open` parameter wired from `EnforcementMode`. In Enforced mode, tokens are treated as unverified when no `crypto:signing` provider exists — previously fell back to `PresenceVerifier` granting wildcard `*` scope. Permissive mode retains backward-compatible fallback.
+- **Mesh listener error escalation**: Transport errors in `poll_events` tracked via `AtomicU32`. First 3 failures log at `debug`, then escalate to `warn` ("signing provider may be unavailable"). Counter resets on successful poll.
+- **Dehydration fallback visibility**: "No signing provider" skip upgraded from `debug` to `warn`. Local-only commit reference message clarifies data will not reach the ledger.
+- **Adapter-agnostic docs**: All "bearDog" references in `mesh/types.rs` and `mesh/listener.rs` replaced with "signing provider" / "crypto:signing provider". Discovery config warning leads with `DISCOVERY_ENDPOINT`.
+- **`constants.rs` split**: 662-line monolith → `constants/` module with 5 submodules (network, ipc, methods, mesh, crypto). Flat re-exports preserve `crate::constants::NAME` API.
+
+#### Wave 128: Coverage Expansion + CI Gate + Clippy 1.94 Fixes (Jun 28, 2026)
+
+- **Coverage expansion (1,825 → 1,866, +41)**: `method_gate.rs` (+10 tests: mock signing provider TCP server, verify_with_provider success/transport-error/invalid-response/discovery-failed/cache-TTL, sync verify, CallerContext async verify, end-to-end gate). `uds.rs` (+12 tests: capability symlink lifecycle, BTSP production mode, length-prefixed handshake, EOF edges). `lib.rs` service (+19 tests: bind addr, TCP conflict, discovery register, graceful shutdown, run_client ops).
+- **CI coverage gate**: Wired `cargo-llvm-cov --fail-under-lines 90` into `.github/workflows/ci.yml`.
+- **Clippy 1.94 compliance**: `byte_str`, `items_after_statements`, `expect_used`, `redundant_clone`, `err_expect`, `cast_possible_wrap`.
+- **Adapter-agnostic**: Last `SongbirdConfig::with_address()` reference in `connection.rs` error message replaced with generic wording.
+
+#### Wave 120: Adapter-Agnostic Messaging + Coverage Expansion + Env Tuning (Jun 20, 2026)
+
+- **Adapter-agnostic runtime messaging**: All hardcoded "Songbird" error/log strings replaced with "discovery service/mesh" across client.rs, connection.rs, discovery.rs, transport.rs. ToadStool runtime messages replaced with "compute provider" / "BYOB compute server". Primal adapter names remain in type names and doc comments (correct for adapter modules), but runtime-facing strings are now capability-based.
+- **Coverage expansion (1,748 → 1,825 tests, +77)**: method_gate.rs (+27 tests covering all parse_verify_ionic error branches, scope extraction, expires_in_from_claims, CapabilityVerifier sync path, EnforcementMode::from_env), transport.rs (+30 tests for try_parse_address, Display, serde roundtrip, connect_transport UDS/MeshRelay, socket_is_alive, JsonRpcTransportError), neural_api.rs (+6 tests for pid=None, NoResult, send failures), safe_env (+3 tests for get_duration_secs).
+- **Env-configurable operational tuning**: New `SafeEnv::get_duration_secs` helper. 4 new env vars: `RHIZOCRYPT_MESH_POLL_INTERVAL_SECS` (30s), `RHIZOCRYPT_HEARTBEAT_INTERVAL_SECS` (45s), `RHIZOCRYPT_CB_FAILURE_THRESHOLD` (5), `RHIZOCRYPT_CB_COOLDOWN_SECS` (30s).
+- **Test isolation**: 3 `temp_env` tests in discovery/manifest.rs converted from `#[tokio::test]` to `#[test]` — eliminates env-var race under parallel execution.
+- **TransportStream** now derives `Debug`. Module-level docs added to `histogram.rs`, `prometheus.rs`.
+
+#### Wave 119: Connect-Probe Liveness + Capability Symlinks (Jun 19, 2026)
+
+- **Connect-probe liveness**: New `transport::socket_is_alive()` replaces `Path::exists` for UDS detection — distinguishes live listeners from stale socket files (ecosystem standard v1.1.5). Wired into neural_api discovery.
+- **Capability domain symlinks**: UDS server creates `dag.sock` symlink → `rhizocrypt.sock` on bind, removes on cleanup (ecosystem standard v1.3.0 capability-domain discovery).
+- **Adapter-agnostic service errors**: "songbird connect/register/heartbeat" → "discovery adapter connect/register/heartbeat" in service lib.rs.
+- **Flaky test fix**: `rpc_integration.rs` retry loops changed from `yield_now()` to `sleep(10ms)` with 100 attempts (up from 50).
+
+#### Wave 118: Deep Debt — Zero-Copy Audit + Coverage + Dep Evolution (Jun 19, 2026)
+
+- **Zero-copy audit**: 7 unnecessary `.clone()` calls eliminated (5 in method_gate.rs, 1 in songbird/client.rs, 1 in mesh/listener.rs via new `to_event_type(&self)`).
+- **Coverage expansion (1,689 → 1,748)**: mesh handler 100% coverage (+15 tests), neural_api coverage (+16 tests), songbird coverage tests (+6).
+- **Dependency evolution**: tokio, bytes, blake3, rand, hyper, clap, tempfile, serde_json, h2 bumped to latest stable.
+- **CapabilityVerifier**: Evolved from PresenceVerifier to full capability-discovered verifier with DiscoveryRegistry, signing provider cache, and PresenceVerifier fallback.
+- **Test file refactoring**: `uds_tests.rs` split into 5 domain-focused test modules.
+
+#### Wave 117: Doc Links + Test Coverage + Mesh Handler (Jun 19, 2026)
+
+- **Broken intra-doc links fixed**: `mesh/mod.rs` and `mesh/listener.rs` doc links corrected.
+- **Reason strings**: Added to all `#[allow(dead_code)]` and `#[allow(clippy::too_many_lines)]` attributes.
+- **Mesh handler 100% coverage**: 15 new tests in `handler_tests_mesh.rs`.
+- **Neural API testability**: Refactored for injectable predicates, 13 new tests.
+- **License completion**: `LICENSE-ORC` and `LICENSE-CC-BY-SA` files created for scyBorg triple-copyleft.
+
+#### Wave 116: Genetics-Layer Mito-Beacon + SSOT Completion (Jun 16, 2026)
+
+- **Mito-beacon signal acceptance (genetics-layer wiring)**: Evolved `riboCipher` prefix handling from exact `[0xEC, 0x01]` match to full mito-beacon signal family. Now accepts any 2-byte prefix starting with `0xEC` (mito-beacon) or `0xED` (mito-beacon extended). Signal constants (`MITO_BEACON_SIGNAL`, `MITO_BEACON_EXTENDED`, `NUCLEAR_LINEAGE_SIGNAL`, `is_genetics_signal()`) centralized in `constants.rs` for ecosystem SSOT. `0xEE` (nuclear lineage) recognized but not yet acted on (Wave 115+ evolution). Addresses Wave 114 "BTSP reject" status — rhizoCrypt now accepts mito-beacon signals per the eukaryotic genetics model.
+- **JSONRPC_VERSION SSOT completed**: Wired `constants::JSONRPC_VERSION` into all remaining 9 production hardcoding sites: `types.rs` (success/error response construction), `mod.rs` (protocol validation), `phase3.rs` (3 BTSP negotiate responses), `registry.rs` (discovery resolve), `loamspine_http/mod.rs` + `wire_types.rs` (HTTP adapter), `unix_socket.rs` (UDS adapter), and `neural_api.rs` (primal announce). Only exception: inline fallback error JSON in `newline.rs` (panic-path, intentionally self-contained).
+- **Health method SSOT**: Added `HEALTH_CHECK`, `HEALTH_LIVENESS`, `HEALTH_READINESS`, `HEALTH_METRICS`, and `HEALTH_METHOD_PREFIX` constants. Wired into handler dispatch (`handler/mod.rs`, `handler/tools.rs`), method gating (`method_gate.rs::PUBLIC_METHOD_PREFIXES`), unauthenticated allowlist (`newline.rs::UNAUTHENTICATED_METHODS`), and health probe (`unix_socket.rs::is_healthy`).
+- **Test terminology evolved**: Renamed `test_ribocipher_*` test functions and comments to `test_mito_beacon_*` across `uds_tests.rs` to match production naming. Added 2 new tests: `test_mito_beacon_extended_signal_accepted` (`0xED`) and `test_mito_beacon_subtype_02_accepted` (`0xEC, 0x02`).
+
+## [0.14.16] - 2026-06-15
+
+### Changed
+
+#### Wave 115: Dead Code Removal + SSOT Sweep + Typed Slice Errors + DRY Provenance (Jun 15, 2026)
+
+- **Dead `MeshEventListener::spawn_poller` removed**: ~30 lines of duplicate polling logic eliminated. `RhizoCrypt::spawn_mesh_poller()` is the sole poll driver. Dead `ListenerState::Polling` variant also removed.
+- **JSON-RPC wire constants centralized**: Added `JSONRPC_VERSION`, `PROVENANCE_RECORD_SESSION_METHOD`, `PROVENANCE_RECORD_DEHYDRATION_METHOD`, `PROVENANCE_RECORD_PROVENANCE_METHOD`, `MESH_TRUST_DOMAIN`, `MESH_TRUST_SESSION_NAME`, `METRICS_PATH`, and `DEFAULT_RATE_LIMIT_{READ,WRITE,EXPENSIVE}_RPS` to `constants.rs`. Wired into provenance client, mesh listener, rate limiter, config, and discovery registry (HTTP path now uses `JSON_RPC_PATH`).
+- **`SliceNotFound` / `SliceAlreadyResolved` accept `SliceId`**: Error variants changed from `String` to `SliceId` (which is `Copy`), eliminating `.to_string()` allocation on every slice lookup error. Clippy-driven `ok_or_else` → `ok_or` simplification applied.
+- **Provenance notifier DRYed**: Triplicated `match Self::send_jsonrpc(...)` blocks (session/dehydration/provenance) collapsed into a single `log_notify_result()` helper.
+- **`#[inline]` on hot cross-crate accessors**: Added to `uptime_secs()`, `session_for_vertex()`, `session_count()`, `total_vertex_count()`, `is_running()`.
+
+## [0.14.15] - 2026-06-14
+
+### Changed
+
+#### Wave 114: Arc-Wrap DagBackend + BTSP Test Extraction + SSOT Hardcoding Sweep (Jun 14, 2026)
+
+- **`DagBackend` Arc-wrapped**: `dag_store()` and `payload_store()` now return `Arc<DagBackend>` and `Arc<InMemoryPayloadStore>` respectively instead of cloning the full enum on every vertex operation. Reduces per-operation overhead from 3-4 atomic increments to 1 (single Arc clone). All callers work unchanged via auto-deref.
+- **BTSP server tests extracted**: Moved 333 lines of handshake tests from inline `mod tests` in `btsp/server.rs` to `btsp/server_tests.rs` via `#[path]` reference. Production code is now 317 lines (down from 650).
+- **SSOT hardcoding sweep**: `RpcConfig::from_env_reader` now reads env vars via `SafeEnv::RHIZOCRYPT_RPC_HOST` / `RHIZOCRYPT_RPC_PORT` / `RHIZOCRYPT_RPC_ENABLED` constants instead of raw string literals. `EnforcementMode::from_env` uses `SafeEnv::RHIZOCRYPT_AUTH_MODE`. Added `RHIZOCRYPT_RPC_ENABLED` and `RHIZOCRYPT_AUTH_MODE` to `SafeEnv`. Default redb filename (`"rhizocrypt.redb"`) and manifest filename (`"rhizocrypt.json"`) centralized as `constants::DEFAULT_REDB_FILENAME` and `constants::DEFAULT_MANIFEST_FILENAME`.
+
+## [0.14.14] - 2026-06-14
+
+### Changed
+
+#### Wave 113: loamspine_http Module Extraction (Jun 14, 2026)
+
+- **`loamspine_http.rs` split into directory module**: Extracted 198 lines of wire types — JSON-RPC 2.0 protocol types (`JsonRpcRequest`, `JsonRpcResponse`, `JsonRpcError`), method negotiation state (`MethodSupport`, `NegotiableError`), and LoamSpine-specific DTOs (`CommitSessionRequest`, `CheckoutSliceResponse`, etc.) — into `loamspine_http/wire_types.rs`. Client logic remains in `loamspine_http/mod.rs` at 477 lines (down from 669). Existing test paths adjusted for the directory layout.
+
+## [0.14.13] - 2026-06-14
+
+### Changed
+
+#### Wave 112: Dead Async Removal + Typed Transport Propagation + Dep Hygiene (Jun 14, 2026)
+
+- **3 `unused_async` suppressions eliminated**: `dispatch_liveness` (now returns `Value` directly, no future), `impl_get_frontier`, `impl_get_genesis` (now sync `fn`). Zero `#[allow(clippy::unused_async)]` remaining in production code.
+- **`send_jsonrpc` wrappers return typed errors**: Both `MeshEventListener::send_jsonrpc` and `ProvenanceNotifier::send_jsonrpc` now return `Result<String, JsonRpcTransportError>` instead of `Result<String, String>`, eliminating `.map_err(|e| e.to_string())` indirection. Callers use `Display` via tracing `%e` — no API change needed.
+- **`tempfile` feature-gated under `redb`**: `tempfile` dependency in `rhizocrypt-service` is now `optional = true` and pulled only when the `redb` feature is active (default). `--no-default-features` builds shed the dependency entirely.
+
+## [0.14.12] - 2026-06-14
+
+### Changed
+
+#### Wave 111: Magic Numbers → Constants + Typed Doctor Error (Jun 14, 2026)
+
+- **Magic numbers centralized into `constants.rs`**: Moved 9 scattered literals into named SSOT constants — `READINESS_NOTIFY_DELAY` (50ms server bind notification), `MESH_AUTH_EVENTS_POLL_METHOD` (cross-gate trust poll RPC method), and 6 announce payload hints (`ANNOUNCE_COST_DAG/INTEGRITY/MERKLE`, `ANNOUNCE_LATENCY_DAG/INTEGRITY/MERKLE_MS`). All prior call sites updated to use the constants.
+- **`DoctorCheckError` typed enum**: Replaced `Result<(), String>` in `check_discovery_connectivity` with a structured `DoctorCheckError` enum with `InvalidAddress` and `Unreachable` variants. Implements `Display`, `Debug`, and `Error` with `#[source]` chaining via `thiserror`. Eliminates the last high-priority untyped error chain identified in the deep debt audit.
+- **Capability method SSOT**: Hardcoded `"auth.events.poll"` string literal in `MeshEventListener::poll_events()` replaced with `constants::MESH_AUTH_EVENTS_POLL_METHOD`, removing cross-primal method name coupling from production code.
+
+## [0.14.11] - 2026-06-14
+
+### Changed
+
+#### Wave 110: DRY JSON-RPC Transport + Typed Error (Jun 14, 2026)
+
+- **`send_jsonrpc_request` shared helper**: Extracted the duplicate `send_jsonrpc` implementations from `provenance/client.rs` and `mesh/listener.rs` into a single `transport::send_jsonrpc_request()` free function with configurable timeouts. Both callers now delegate to it, eliminating ~60 lines of duplicated transport code.
+- **`JsonRpcTransportError` typed enum**: The shared helper returns a structured error with 6 variants (`ConnectTimeout`, `ConnectFailed`, `Serialize`, `Write`, `ResponseTimeout`, `Read`) instead of `Result<_, String>`. Implements `Display`, `Debug`, and `Error` with proper `source()` chaining. Callers convert to `String` at their own boundary for now.
+
+## [0.14.10] - 2026-06-14
+
+### Added
+
+#### Wave 109: riboCipher Prefix Acceptance (Jun 14, 2026)
+
+- **riboCipher `[0xEC, 0x01]` prefix accepted on UDS**: cellMembrane health probes may prepend a 2-byte riboCipher signal before JSON-RPC. The UDS connection handler (`handle_uds_connection`) now reads the first 2 bytes from every connection: if they match `[0xEC, 0x01]` they are silently consumed; otherwise they are chained back into the stream for normal protocol detection (BTSP or plaintext JSON-RPC). Works in both dev mode and BTSP-enforced mode.
+- **`detect_btsp_or_jsonrpc` extracted**: The JSON-line BTSP vs. plain JSON-RPC detection logic was extracted from `handle_uds_connection` into a dedicated helper, bringing the main handler under the 100-line clippy limit.
+- **3 new integration tests**: `test_ribocipher_prefix_jsonrpc_over_uds` (dev mode), `test_ribocipher_prefix_btsp_uds_plain_jsonrpc` (BTSP mode), `test_no_ribocipher_prefix_still_works` (regression guard).
+
+## [0.14.9] - 2026-06-11
+
+### Changed
+
+#### Wave 108: Typed Discovery Errors (Jun 11, 2026)
+
+- **`DiscoveryQueryError` typed enum**: Replaced `Result<_, String>` in `query_discovery_source` with a structured `DiscoveryQueryError` enum. Seven `format!`/`to_string()` error sites now use typed variants (`SerializeRequest`, `ConnectTimeout`, `ConnectFailed`, `WriteFailed`, `ReadTimeout`, `ReadFailed`, `ParseResponse`). Implements `Display`, `Debug`, and `Error` with proper `source()` chaining. Converts to `String` only at the `DiscoveryStatus::Failed` boundary.
+
+## [0.14.8] - 2026-06-11
+
+### Changed
+
+#### Wave 107: HEALTH-RC-01 — Health Contract Compliance (Jun 11, 2026)
+
+- **`health_liveness()` enriched (HEALTH-01 contract)**: Liveness probe now returns `{status, primal, version, uptime_s}` per the ecosystem-wide health contract. Previously returned only `{"status":"alive"}`. All three aliases (`health.liveness`, `ping`, `health`) now route through `dispatch_liveness` which reads uptime from the shared `RhizoCryptRpcServer` start time.
+- **`RhizoCryptRpcServer::start_time()` accessor**: New `const fn` exposing the server's start instant for uptime calculation outside the tarpc trait impl.
+- **Health tests tightened**: Handler tests for `ping` and `health` aliases now validate the full HEALTH-01 schema (`status`, `primal`, `version`, `uptime_s`). Property test updated to check structural fields.
+
+## [0.14.7] - 2026-06-10
+
+### Changed
+
+#### Wave 105: Socket/Manifest SSOT + ENV_PREFIX + Visibility (Jun 10, 2026)
+
+- **`manifest_dir()` now delegates to `socket_dir()`**: Manifest discovery uses the same 3-tier fallback chain as socket binding (XDG → `/run/biomeos` → `temp_dir/biomeos`). Previously, `manifest_dir()` only checked `XDG_RUNTIME_DIR` and returned `None` without it — causing `publish_manifest()` to fail even when the service had a working UDS.
+- **`default_socket_path()` simplified**: Removed duplicate fallback logic that re-implemented `family_scoped_socket_path()`; now delegates directly. Only falls back to `temp_dir` on platforms where `socket_dir()` returns `None`.
+- **`niche::ENV_PREFIX` constant**: Added `"RHIZOCRYPT"` as a centralized constant. All production callers of `btsp_env_guard`, `read_family_id`, `read_family_seed`, and `family_scoped_socket_path` now use `niche::ENV_PREFIX` instead of hardcoded string literals.
+- **Songbird service ID uses `PRIMAL_ID`**: Registration service ID prefix changed from hardcoded `"rhizocrypt-"` to `format!("{}-...", niche::PRIMAL_ID)`.
+- **`cleanup_socket_at` visibility tightened**: Changed from `pub` to `pub(crate)` — only used within `rhizo-crypt-rpc`.
+- **Module doc updates**: `manifest.rs` doc comments updated to reflect the fallback-tier discovery flow instead of XDG-only.
+
+## [0.14.6] - 2026-06-09
+
+### Changed
+
+#### Wave 104: Discovery Fix + Module Extraction + Live Clients (Jun 9, 2026)
+
+- **Discovery registration now connects first**: `register_with_discovery` calls `client.connect()` before `register()`, checks `result.success`, and propagates rejection as `ServiceError::Discovery`. Previously, registration was silently dead (never connected, `register()` would fail immediately).
+- **`live-clients` feature enabled by default**: `rhizocrypt-service` now enables `live-clients` on `rhizo-crypt-core`, activating real tarpc transport for Songbird mesh registration, heartbeat, and capability discovery in production builds.
+- **`rhizocrypt/mod.rs` extraction**: Vertex CRUD, query, and Merkle operations (append, get, get_all, query, compute_merkle_root, generate_merkle_proof) extracted to `vertex_ops.rs`. Core module reduced from 671 → 523 production lines.
+- **Tarpc dispatch clone reduction**: Removed redundant `method_owned.clone()` in `TarpcAdapter::call` — method string was being cloned once for the RPC call and again unnecessarily; now consumed by `client.call()` directly.
+
+## [0.14.5] - 2026-06-08
+
+### Changed
+
+#### Wave 103: Server Lifecycle + Discovery Bootstrap + SSOT (Jun 8, 2026)
+
+- **Discovery bootstrap now parses `TransportEndpoint`**: `lib.rs` service startup uses `TransportEndpoint::try_parse_address` instead of `SocketAddr`-only parsing for the discovery source, enabling UDS-based discovery.
+- **Shared `RhizoCryptRpcServer` per transport**: JSON-RPC (HTTP + newline), UDS, and tarpc servers now create a single `RhizoCryptRpcServer` at startup and share it across all connections. Previously, a new server was constructed per request/connection, resetting `start_time` on each — `health.check` and `health.metrics` now report correct uptime.
+- **`handle_request` takes `&RhizoCryptRpcServer`**: Handler dispatch no longer requires `Arc<RhizoCrypt>` — receives a shared server reference. Eliminates per-request `Arc::clone` + `Instant::now()` overhead.
+- **`RhizoCryptRpcServer::primal()` accessor**: New public method to access the underlying `RhizoCrypt` instance without field access.
+- **SSOT string cleanup**: Hardcoded `"rhizocrypt"` literals in `lib.rs` (manifest + unpublish), `uds.rs` (socket path) replaced with `niche::PRIMAL_ID`. Hardcoded `"ecoPrimal"` default in `neural_api.rs` replaced with `constants::DEFAULT_FAMILY_ID`.
+- **New constant `DEFAULT_FAMILY_ID`**: Centralizes the fallback family identifier for neural API socket discovery.
+
+## [0.14.4] - 2026-06-08
+
+### Changed
+
+#### Wave 102: Deep Debt — Transport Pervasion + Service Extraction (Jun 8, 2026)
+
+- **`ServiceEndpoint.addr` → `ServiceEndpoint.endpoint`**: Evolved from `SocketAddr` to `TransportEndpoint` across discovery, integration, and all capability clients. Every outbound client now resolves addresses via transport abstraction.
+- **`DiscoveryRegistry::discovery_source`**: Evolved from `SocketAddr` to `TransportEndpoint`. Discovery adapter queries now use `connect_transport()` with conditional `TCP_NODELAY`.
+- **`ComputeProviderClient`**: Probe connection evolved from raw `TcpStream::connect` to `connect_transport()`. Endpoint stored as `TransportEndpoint`.
+- **`AdapterFactory`**: Supports `tcp://` protocol scheme (maps to tarpc adapter like `tarpc://`).
+- **`TransportEndpoint`**: Added `From<SocketAddr>`, `uds()`, `parse_address()`, `try_parse_address()` helpers. Backward-compatible with existing `SocketAddr` callers.
+- **`service.rs` extraction**: Split from 686L to 589L by extracting vertex/event ops (154L) and branch/federate ops (89L) into `service_vertex_ops.rs` and `service_branch_ops.rs`.
+- **`doctor.rs`**: Health-check probe uses `connect_transport()` instead of raw `TcpStream`.
+- **Neural API**: `/tmp` fallback path centralized as `constants::POSIX_FALLBACK_TMPDIR`.
+
+## [0.14.3] - 2026-06-08
+
+### Added
+
+#### Wave 100–101: Transport Evolution — Local TransportEndpoint (Jun 8, 2026)
+
+- **Transport injection**: `TransportEndpoint`, `TransportStream`, and `connect_transport()` implemented locally in `transport.rs` (~170 lines). Wire-compatible with ecosystem standard (sourDough, songBird, cellMembrane tagged JSON format). **No cross-primal dep** — the wire format is the contract.
+- **`TRANSPORT_ENDPOINT` env var**: Parsed as JSON-encoded `TransportEndpoint` from launcher. Logged at startup. `SafeEnv::transport_endpoint()` helper added.
+- **Re-exports**: `TransportEndpoint`, `TransportStream`, `connect_transport` re-exported from `rhizo-crypt-core` root.
+- **Provenance notifier**: `connect()` fallback now accepts both legacy `host:port` strings and JSON `TransportEndpoint` format. Endpoint field evolved from `SocketAddr` to `TransportEndpoint`.
+- **Mesh event listener**: `send_jsonrpc()` uses `connect_transport()`. `TCP_NODELAY` applied only when transport is TCP (correct per transport type).
+- **Niche**: `transport` added to `DEPENDENCIES` as optional capability domain.
+
+### Fixed
+
+- **Removed `sourdough-core` path dep** (Wave 101): Cross-primal path dependency violated primal self-knowledge. Replaced with local wire-compatible implementation. Zero cross-primal compile deps restored.
+
+## [0.14.2] - 2026-06-05
+
+### Added
+
+#### Wave 78: Mesh-Trust DAG Append + Lifecycle Wiring (Jun 5, 2026)
+
+- **Mesh-trust session auto-provision**: `spawn_mesh_poller()` on `RhizoCrypt` creates a `SessionType::Custom { domain: "mesh-trust" }` session on the first polled trust event, then reuses it for all subsequent events.
+- **DAG vertex append**: Each `MeshTrustEvent` polled from bearDog's `auth.events.poll` is converted to an `EventType` variant via `into_event_type()` and appended to the mesh-trust session as a `Vertex` via `append_vertex()`.
+- **Service-layer lifecycle wiring**: `spawn_mesh_poller()` is called from the service layer after `Arc::new(primal)`, running as a background task alongside `spawn_gc_sweeper()`. Non-fatal — runs silently when no signing provider is available.
+- **`config/capability_registry.toml`**: Moved from project root to `config/` for ecosystem convention consistency (biomeOS, petalTongue, sweetGrass pattern).
+- Updated all doc references (`README.md`, `CONTEXT.md`, `validation-summary.md`, `constants.rs`) to reflect the new `config/` path.
+
+## [0.14.1] - 2026-06-01
+
+### Fixed
+
+#### Wave 67: Provenance Trio Wire Alignment (Jun 1–2, 2026)
+
+- **Permanent commit method names fixed**: `PermanentStorageClient` adapter calls now use ecosystem-standard dot-notation (`commit.session`, `commit.verify`, `commit.get`, `slice.checkout`, `slice.resolve`) instead of underscore-separated names. Aligns with LoamSpine's native method negotiation — trio wiring would have failed on live commit path.
+- Wire constants centralized in `permanent.rs::wire` module for single-source-of-truth method naming.
+- **ProvenanceNotifier connected at startup**: `connect()` was never called — all push notifications to sweetGrass were silent no-ops. Now called during `PrimalLifecycle::start()` with graceful failure (provenance trio is optional).
+- **Session commit notification hooked**: `notify_session_commit()` now fires after successful dehydration commit, notifying attribution providers of finalized sessions.
+- **Workspace dependency hygiene**: Hoisted `chacha20poly1305`, `clap`, `tempfile`, `proptest`, and `wiremock` from crate-local pins to `[workspace.dependencies]`. Unified `tempfile` version (was `"3"` in rpc, `"3.15"` in core/service — now `"3.15"` everywhere).
+- **Discovery `resolve` wire bug fixed**: `query_discovery_source` used `format!("{capability:?}")` (Debug: `"Signing"`) instead of `capability.to_string()` (Display: `"crypto:signing"`). Songbird/biomeOS expect colon-delimited names — live peer resolution would have missed all matches.
+- **Discovery source bootstrapped at startup**: Engine's `DiscoveryRegistry` now receives `set_discovery_source` when Songbird address is configured. Capability clients (signing, permanent storage, provenance) can now resolve peers at runtime instead of staying empty.
+- **Eager peer population**: `register_with_discovery` now returns the connected `DiscoveryClient`. `serve_with_tcp` calls `populate_registry()` at startup to eagerly seed the engine's registry with peer endpoints — capability clients no longer wait for their first lazy query.
+- **Neural API announce extracted**: `announce_to_biomeos`, `discover_neural_api_socket`, and `send_jsonrpc_uds` moved from `lib.rs` (712→589 lines) into `neural_api.rs` (141 lines). All production files remain under 700 lines.
+- **Handler tests refactored (1419→722 lines)**: Extracted gates/auth (194L), composition (213L), provenance aliases (153L), and partial dehydrate (133L) into focused test modules. Zero files over 800 lines remain.
+- **Version reconciliation**: Aligned `0.14.0` → `0.14.1` across README, CONTEXT, DEPLOYMENT_CHECKLIST, ENV_VARS, Dockerfile, k8s, capability_registry, deploy graph, specs index, and service README. Archived `CONTENT_INDEX_EXPERIMENT.md` (unimplemented draft → `specs/archive/`).
+
+#### Wave 69: Discovery Fallback Hardening + Test Coverage (Jun 2, 2026)
+
+- **Lazy discovery fallback tests**: Added `test_lazy_fallback_after_eager_population_failure` — verifies that when eager `populate_registry()` fails, the lazy `query_discovery_source` path resolves peers on first capability query. Also: `test_standalone_mode_no_source_no_population`, `test_lazy_source_unreachable_returns_failed`.
+- **Dehydrate edge cases**: `test_partial_dehydrate_missing_session_id`, `test_partial_dehydrate_nonexistent_session`, `test_partial_dehydrate_idempotent`.
+- **Readiness gate coverage**: `test_readiness_gate_allows_health_prefix_when_not_running` (all `health.*`), `test_readiness_gate_allows_exact_public_methods_when_not_running` (`primal.capabilities`, `capabilities.list`, `identity.get`, `tools.list`).
+- **sled→redb audit**: Confirmed zero sled references in active code/deps. redb 2.6.3 is the sole persistent backend. `DagStore` trait + `DagBackend` enum provide clean migration abstraction for downstream primals.
+- **Wave 68 FRAGO acked**: `wave68-dependency-evolution-coordination` — rhizoCrypt has no action (sled fully removed since s20, redb is default). southGate owns Songbird+BearDog sled→redb migration.
+- **Stadial gate**: 1,663 tests, 0 clippy warnings, 180 `.rs` files, max 686L production file, zero `unsafe` blocks.
+
+#### Wave 76: Cross-Gate Mesh Event Types (Jun 3, 2026)
+
+- **Cross-gate DAG event types**: Added 5 new `EventType` variants in the `mesh` domain for recording trust establishment and mesh lifecycle across gate boundaries:
+  - `TrustIssuerRegistered` — Ed25519 issuer registered in gate's trusted issuer registry (aligns with bearDog w135 `TrustedIssuerRegistry`).
+  - `KeyExchangeCompleted` — cross-gate Ed25519 key exchange completed with method specification.
+  - `FamilyEnrollment` — primal family enrolled in mesh through a gate.
+  - `MeshJoin` — gate joined mesh network.
+  - `MeshLeave` — gate left mesh network (with `MeshLeaveReason`: `Graceful`, `Disconnected`, `Evicted`, `TrustRevoked`).
+- **Event tests extracted**: Moved 390 lines of event tests from `event.rs` (was 922L) to `event_tests.rs`. Production file now 539 lines.
+- **`MeshLeaveReason` re-exported** from `rhizo-crypt-core` lib root for consumer access.
+- **EVENT_TYPE_REFERENCE.md updated**: Variant count 27→32, 8 domains (added mesh), domain mapping table updated, wire format examples for all new types.
+- **Wave 76 FRAGO acked**: `wave76-parity-sprint-provenance` — schemas defined and serialization tested. Not yet wired to bearDog.
+- **Stadial gate**: 1,670 tests, 0 clippy warnings, 181 `.rs` files, max 698L production file (rpc_integration.rs), zero `unsafe` blocks.
+
+#### Wave 77e: MeshEventListener Polling — RC-POLL-01 Complete (Jun 4, 2026)
+
+- **Polling wired**: `MeshEventListener::poll_events()` sends `auth.events.poll` JSON-RPC to bearDog with incremental `since_timestamp`, deserializes `MeshTrustEvent` entries from response, records each via `record_event()`. Newline-delimited TCP transport (same as `ProvenanceNotifier`).
+- **Background poller**: `spawn_poller()` runs a `tokio::spawn` task polling every 30s (`MESH_POLL_INTERVAL`). Non-fatal — poll failures logged and retried. Tracks `ListenerState::Polling`.
+- **Constants added**: `MESH_POLL_INTERVAL` (30s), `MESH_CONNECTION_TIMEOUT` (5s), `MESH_RESPONSE_TIMEOUT` (10s).
+- **bearDog ACK received**: FRAGO `wave76c-beardog-auth-events-subscribe` answered — bearDog Wave 139 delivered Option C (`auth.events.poll`) with `AuthEventBus`, wire format matching our DTOs exactly. `TrustIssuerRegistered` and `KeyExchangeCompleted` actively emitted.
+- **RC-POLL-01 resolved**: Provenance chain now completable: bearDog → rhizoCrypt → loamSpine → sweetGrass.
+- **Stadial gate**: 1,683 tests, 0 clippy warnings (including `--tests`), 186 `.rs` files, zero `unsafe` blocks.
+
+#### Wave 77d: Lifecycle Extraction + mesh.events.record Handler + Niche Wiring (Jun 4, 2026)
+
+- **Lifecycle extracted**: `PrimalLifecycle` + `PrimalHealth` impls moved from `rhizocrypt/mod.rs` (701→579 lines) to `rhizocrypt/lifecycle.rs` (137 lines). Production code well under 700L limit.
+- **`mesh.events.record` handler**: New JSON-RPC method wired end-to-end — handler dispatches to `MeshEventListener::record_event()`, returns mapped `EventType` name and event count. Protected by method gate (requires auth token).
+- **Niche catalog updated**: `mesh.events.record` added to `METHOD_CATALOG` (37 methods, 7 domains). `mesh` domain added to `DOMAIN_DESCRIPTIONS`. `crypto.trust_events` added to `CONSUMED_CAPABILITIES`. `mesh` dependency added to `DEPENDENCIES` (optional, graceful fallback).
+- **`capability_registry.toml`**: `mesh_events_record` entry added (domain: `mesh`, stability: `evolving`).
+- **`cargo-deny`**: advisories ok, bans ok, licenses ok, sources ok.
+- **Stadial gate**: 1,681 tests, 0 clippy warnings (including `--tests`), 186 `.rs` files, max 686L production file (`service.rs`), zero `unsafe` blocks.
+
+#### Wave 76b: MeshEventListener + IPC Trigger Path Design (Jun 4, 2026)
+
+- **`MeshEventListener` module**: New `types_ecosystem::mesh` module with listener, wire DTOs, and event mapping. Mirrors `ProvenanceNotifier` architecture (inverted — inbound from bearDog instead of outbound to sweetGrass).
+  - `MeshEventListener` — discovers signing provider, connects at startup (non-fatal), provides `record_event()` for mapping trust events to DAG vertices.
+  - `MeshTrustEvent` / `MeshTrustEventKind` — wire DTOs for bearDog w137 `auth.trust_issuer` payloads with 1:1 mapping to `EventType` mesh variants.
+  - IPC trigger path designed: bearDog `auth.trust_issuer` → rhizoCrypt listener → `EventType::TrustIssuerRegistered` → DAG append.
+- **`RhizoCrypt` struct wired**: `mesh_listener` field added, created in `new()`, connected in `PrimalLifecycle::start()` (non-fatal, after provenance notifier). `mesh_listener()` accessor exposed.
+- **Re-exports**: `MeshEventListener`, `MeshTrustEvent`, `MeshTrustEventKind` re-exported from `lib.rs`.
+- **11 new tests**: Wire DTO roundtrip, `into_event_type` mapping for all 5 event kinds, listener state machine, drain, discovery connection.
+
+#### Deep Debt Hygiene: Clippy Guard Consistency + Provenance Wire Fix (Jun 3–4, 2026)
+
+- **Clippy `#[expect]` full migration**: Migrated 29 test files from `#![allow(clippy::unwrap_used)]` to `#![expect(clippy::unwrap_used, reason = "test code")]`. Removed unfulfilled guards where test files only use `expect()` (not `unwrap()`). Added guards to 2 additional inline test modules (`dehydration_wire.rs`, `integration/mocks.rs::capability_mock_tests`). Zero unfulfilled-expect warnings with `--tests`.
+- **Provenance wire fix**: `ProvenanceNotifier::send_jsonrpc` used `unwrap_or_default()` for serialization — would silently send empty line on failure. Evolved to `map_err(|e| format!("Serialize failed: {e}"))?` for proper error propagation.
+- **Audit findings**: Zero `.unwrap()`/`.expect()` in production code across all 184 `.rs` files. All test `unwrap()`/`expect()` properly guarded. Zero `unsafe` blocks. Zero TODO/FIXME markers.
+- **Stadial gate**: 1,681 tests, 0 clippy warnings (including `--tests`), 184 `.rs` files, max 701L (production 693L), zero `unsafe` blocks.
+
+## [0.14.0] - 2026-05-29
+
+### Added
+
+#### Deep Debt S70: Structural Refactoring (May 29, 2026)
+
+- **`rhizocrypt/mod.rs` refactored (858→676 lines)**: Branch/diff/merge/federate ops extracted to `branch_ops.rs` submodule. All production files now under 700 lines.
+- **`niche.rs` refactored (800→435 lines)**: PROVENANCE_ALIASES, derived accessors, response builders, MCP tools, and normalize_method extracted to `niche_derived.rs`. METHOD_CATALOG remains the SSOT in `niche.rs`.
+- **`BearDogVerifier` → `PresenceVerifier`**: Decoupled primal name from method gate security path. Verifier is now generically named per its actual behavior (presence-only check until JH-11).
+- **biomeOS path centralized**: `/tmp/biomeos` hardcoded string in `lib.rs` replaced with `constants::BIOMEOS_SOCKET_SUBDIR` helper.
+- **`register_with_discovery` fixed**: Added `connect()` before `register()` and `RegistrationResult.success` check. Registration was always hitting "Not connected" error.
+- **Handler tests refactored (1731→1419 lines)**: Wave 60 branching tests extracted to `handler_tests_branching.rs`.
+- **Stale test fix**: Songbird scaffolded registration tests updated to match actual `success: false` behavior without `live-clients` feature.
+- **`serde` `rc` feature restored**: Required by `Did(Arc<str>)` serialization.
+- **Stadial gate**: 1,654 tests, 0 clippy warnings, 175 `.rs` files, ~54,294 lines.
+
+#### Wave 60: DAG Evolution — Branch/Diff/Merge/Federate (May 29, 2026)
+
+- **4 new DAG methods** for rootPulse signal graphs (version control over graph composition):
+  - `dag.branch` — Fork a session at a checkout vertex, copying the ancestor subgraph into a new session. Enables named branch points in the DAG.
+  - `dag.diff` — Compute structural diff between two DAG session frontiers. Returns vertex sets unique to each side plus common count.
+  - `dag.merge` — Create a merge vertex joining 2+ frontier tips (3-way merge semantics). Validates all parents are current frontier vertices.
+  - `dag.federate` — Import vertices from a remote peer into a local session. Diff-based: vertices already present are skipped. Cross-gate ready.
+- **Full stack implementation**: Core types (`BranchRequest/Response`, `DiffRequest/Response`, `MergeRequest`, `FederateRequest/Response`), core logic on `RhizoCrypt`, tarpc trait methods, JSON-RPC handler dispatch (`handler/branch.rs`), `METHOD_CATALOG` entries (36 total), `PROVENANCE_ALIASES`, `capability_registry.toml` (4 capabilities, stability: evolving), deploy graph updated.
+- **Vertex::clone_for_branch()**: Clones a vertex with cleared cached ID for use in branched sessions.
+- **8 new handler tests**: Branch lifecycle, invalid vertex rejection, diff between sessions, merge frontier collapse, merge single-parent rejection, federate import, federate duplicate skip, provenance.branch alias.
+- **Niche test coverage**: `normalize_method` tests for `provenance.branch/diff/merge/federate` aliases.
+- **Stadial gate**: 1,654 tests, 0 clippy warnings, 0 fmt diffs. 175 `.rs` files, ~54,294 lines.
+
+### Changed
+
+#### Root Docs & Version Reconciliation (May 25, 2026)
+
+- **Version `-dev` suffix dropped**: `0.14.0-dev` → `0.14.0` across workspace Cargo.toml, docs, capability_registry, deploy graph, Dockerfile, manifest.rs. Resolves Wave 22 version hygiene item.
+- **Metrics reconciled**: 175 → 171 `.rs` files, ~53,852 → ~53,341 lines (post-showcase fossilization). Updated across README, CONTEXT, DEPLOYMENT_CHECKLIST, sporeprint, specs.
+- **DEPLOYMENT_CHECKLIST Docker section**: Aligned with root `Dockerfile` (`FROM scratch`, `/rhizocrypt` path). Fixed duplicate "Option 2/3" numbering. Updated date and CHANGELOG reference.
+- **Service README Docker example**: Aligned with root `Dockerfile` (`FROM scratch` instead of Alpine).
+- **ARCHITECTURE.md**: Updated showcase and specs descriptions for Wave 49.
+
+#### Wave 49: Ecosystem Tightening (May 25, 2026)
+
+- **Showcase fossilized**: `showcase/` (72 demo scripts, crypto primitive showcases, key rotation demos) archived to `fossilRecord/primals/rhizoCrypt/showcase_wave49/`. Replaced with README pointer.
+- **Startup latency fixed**: `announce_to_biomeos()` moved from blocking critical path to `tokio::spawn()` background task. Eliminates up to 7s of UDS timeout on startup when biomeOS is unavailable. Service reports ready after `primal.start()` + UDS bind + manifest publish — announce continues in background.
+- **Stale deployment patterns removed**: `target/release/rhizocrypt` references replaced with `plasmidBin` depot pattern (`rhizocrypt` via PATH) in `DEPLOYMENT_CHECKLIST.md` and `rhizocrypt-service/README.md`. No `which rhizocrypt` references found.
+- **`notify-plasmidbin.yml` verified active**: Workflow dispatches rebuild to `ecoPrimals/plasmidBin` on every push to `main`.
+
+#### Deep Debt Audit — S70 (May 24, 2026)
+
+- **`Box<dyn Error>` eliminated**: `send_jsonrpc_uds` return type changed from `Box<dyn std::error::Error + Send + Sync>` to `ServiceError`. Zero `Box<dyn Error>` in production code.
+- **Songbird scaffolded registration honesty**: `register()` with `live-clients` disabled now returns `success: false` with a clear message instead of faking `success: true` with a synthetic service ID. Discovery `discover()` was already honest (returns empty Vec).
+- **Method gate tests extracted**: `method_gate.rs` dropped from 825 to 489 production lines — tests moved to `method_gate_tests.rs` via `#[path]`.
+- **Handler test harness deduplicated**: Shared helpers (`test_gate`, `test_caller`, `create_test_primal`, `make_request`) extracted to `handler_test_support.rs`, eliminating duplication between `handler_tests.rs` and `handler_tests_validation.rs`.
+- **Magic numbers to constants**: Inline timeouts (2s connect, 5s read) → `NEURAL_API_CONNECT_TIMEOUT_SECS`/`NEURAL_API_READ_TIMEOUT_SECS` in `constants.rs`. Storage cap (1 GiB) → `DEFAULT_MAX_MEMORY_BYTES`.
+- **Workspace dependency hygiene**: `base64` and `hex` hoisted to `[workspace.dependencies]` (resolves `0.4` vs `0.4.3` pin inconsistency).
+- **Deep debt audit (12-category)**: Zero `unsafe`, zero `async-trait`, zero `Arc<Mutex>`, zero `Box<dyn Error>` in production, zero unwrap/expect in production, zero TODO/FIXME/HACK/XXX, zero `&Vec`/`&String` params, zero `#[allow(dead_code)]` in production.
+- **Files >800L**: Only test files exceed the threshold. All production files under 700 lines.
+- **Stadial gate**: 1,646 tests, 0 clippy warnings, 0 fmt diffs. 175 `.rs` files, ~53,852 lines.
+
+#### Wave 47: Deployment Behavior Convergence (May 24, 2026)
+
+- **`--socket` CLI alias**: Added `visible_alias = "socket"` on the `--unix` clap flag so `rhizocrypt server --socket /path/to/sock` works identically to `--unix /path/to/sock`. Lets `plasmidBin/start_primal.sh` pass `--socket` uniformly across all primals without per-primal workaround blocks. Compliance matrix: `--socket` PASS.
+- **No other action required**: `health.liveness` already returns `{"status":"alive"}`, `lifecycle.status` already exists, `primal.announce` ships since Wave 43, socket cleanup compliant since S23, SIGTERM/SIGINT handled.
+
+#### Wave 43: Neural API `primal.announce` Adoption (May 23, 2026)
+
+- **`primal.announce` outbound handler**: On startup after UDS bind, rhizoCrypt now sends a `primal.announce` JSON-RPC call to biomeOS's Neural API socket, registering capabilities (`dag`, `integrity`, `merkle`), all 32+ methods, `provenance.*` semantic mappings, cost hints, latency estimates, and signal tier (`nest`).
+- **Socket discovery**: Tiered lookup for biomeOS neural-api socket — `$NEURAL_API_SOCKET` override, `$XDG_RUNTIME_DIR/biomeos/neural-api-{family}.sock`, `/tmp/biomeos/neural-api-{family}.sock`. Non-fatal if biomeOS is unavailable (standalone mode).
+- **`announce_payload()` in niche.rs**: Builds the full Wire Schema payload per `WAVE42_NEURAL_API_DEPLOYMENT_GUIDE.md`, including `primal`, `socket`, `pid`, `capabilities`, `methods`, `semantic_mappings`, `signal_tiers`, `cost_hints`, `latency_estimates`, `version`.
+- **4 new tests**: `announce_payload_has_required_fields`, `announce_payload_has_cost_and_latency_hints`, `announce_payload_includes_semantic_mappings`, `announce_payload_pid_optional`.
+- **Wave 22 checklist item resolved**: `primal.announce` was one of 2 remaining FAIL items in the stadial checklist — now PASS.
+- **Deep debt audit**: 12-category scan clean. Zero `unsafe`, zero `async-trait`, zero `Arc<Mutex>`, zero `Box<dyn Error>` in production, zero unwrap/expect in production, zero TODO/FIXME/HACK.
+- **Stadial gate**: 1,646 tests, 0 clippy warnings, 0 fmt diffs. 173 `.rs` files, ~53,839 lines.
+
+#### Stale Socket Cleanup Audit (May 18, 2026) — ALREADY COMPLIANT
+
+- **primalSpring stale socket audit**: wetSpring observed 50+ stale sockets on southGate causing 21 failed connections per Barrick clone run. All primals asked to implement `unlink()` before `bind()` and cleanup on shutdown.
+- **rhizoCrypt status**: Already fully compliant since S23. `prepare_socket_path()` removes any pre-existing socket before `UnixListener::bind()`. `cleanup()` removes the socket on shutdown signal. Existing tests: `test_uds_stale_socket_removed`, `test_uds_cleanup_removes_file`, `test_uds_cleanup_nonexistent_noop`, `test_uds_server_cleanup_idempotent`.
+- **No code changes required**.
+
+#### S69: Wave 22 Stadial Gate — `dag.partial_dehydrate` + Composition Readiness
+
+- **UPSTREAM ASK: `dag.partial_dehydrate`** (wetSpring sovereign pipeline): Computes a Merkle root over current (or specified subset of) vertices without closing the session. Enables cryptographically valid partial braids as LTEE clones complete in long-running computations (Tenaillon 2016, 264 clones). Response: `{ merkle_root, sealed_count, open_count, session_open }`. Accepts optional `vertex_ids` filter for subset roots. `provenance.partial_dehydrate` wire-name alias included.
+- **`capabilities.list` format compliance**: Response now includes `capabilities` (array) and `count` (integer) fields per `CAPABILITY_WIRE_STANDARD.md`, alongside existing `methods` for backward compatibility.
+- **Stability tier annotations**: All 32 registered capabilities in `capability_registry.toml` now have `stability = "stable"` or `stability = "evolving"` (`dag.partial_dehydrate` only). Addresses stadial checklist requirement.
+- **Composition readiness documentation**: README now includes downstream pairing table (wetSpring, lithoSpore, projectFOUNDATION, healthSpring), degradation behavior when rhizoCrypt is unavailable, and stability tier summary.
+- **Hex string acceptance (composition gap #6)**: Verified closed — `parse_hash32` in `params.rs` accepts both hex strings and `[u8; 32]` byte arrays with 7 unit tests, resolving the shared gap with loamSpine.
+- **4 new tests**: `test_partial_dehydrate_all_vertices` (validates match with `merkle_root`), `test_partial_dehydrate_subset` (vertex filter), `test_partial_dehydrate_does_not_close_session` (session remains open), `test_partial_dehydrate_via_provenance_alias`.
+- **Universal standards checklist**: Self-audited against Wave 22 checklist. 15/20 PASS (runtime, security, build all green), 3 PARTIAL (BTSP enforcement, method naming aliases, degradation docs — now addressed), 2 FAIL (primal.announce and btsp.capabilities — ecosystem-wide patterns not yet adopted by any primal).
+- **Deep debt audit**: 12-category scan clean. Zero `unsafe`, zero `async-trait`, zero `Arc<Mutex>`, zero `Box<dyn Error>` in production, zero unwrap/expect in production, zero TODO/FIXME/HACK.
+- **Stadial gate**: 1,642 tests, 0 clippy warnings, 0 fmt diffs. 173 `.rs` files, ~53,623 lines.
+
+#### S68: GAP-36 Resolution — Wire-Name Aliases + Enriched Session Summary
+
+- **GAP-36 root cause**: Downstream springs (primalSpring `domain_contract_sweep`, healthSpring Nest atomic) call `provenance.session.create` / `provenance.event.append` — rhizoCrypt previously only dispatched `dag.*` methods, returning `MethodNotFound` (-32601) for `provenance.*` calls. This was incorrectly reported as "UDS handlers accept connections but return no JSON-RPC payloads" — the handlers did respond, but with error payloads that downstream interpreted as non-functional.
+- **Wire-name alias layer**: `normalize_method()` in `niche.rs` now maps all 21 `provenance.*` methods to their `dag.*` canonical equivalents at the normalization layer, transparent to dispatch, readiness gate, and method gate. `SEMANTIC_ALIASES` updated for biomeOS capability routing.
+- **GAP-34/35 reconciliation**: Confirmed `dag.*` is canonical for rhizoCrypt; `provenance.*` is the downstream wire name used by springs exercising the DAG surface through the provenance trio lens. Both are now valid. Documented the full alias table in `capability_registry.toml`.
+- **Enriched `dag.session.get` (projectNUCLEUS `dag_summary` proposal)**: `SessionInfo` now includes `agents` (all participant DIDs), `genesis` (root vertex IDs), and `frontier` (tip vertex IDs) — covers the event count, participants, and topology summary that CATHEDRAL needs for lithoSpore provenance chains. No new method needed; `dag.session.get` serves as the canonical session summary. Wire-compatible: new fields use `#[serde(default)]` so existing JSON consumers are unaffected.
+- **7 new tests**: `normalize_method_maps_provenance_to_dag` (17 alias assertions), `normalize_method_preserves_non_aliased` (3 assertions), `test_provenance_session_create_alias`, `test_provenance_event_append_alias`, `test_provenance_dehydrate_alias`, `test_provenance_full_pipeline_via_aliases`, `test_session_get_returns_summary_fields` (agents, genesis, frontier verified after multi-agent event append).
+- **Deep debt audit**: 12-category scan clean. Zero `unsafe`, zero `async-trait`, zero `Arc<Mutex>`, zero `Box<dyn Error>` in production, zero unwrap/expect in production, zero TODO/FIXME/HACK, zero `&Vec<`/`&String`, all deps pure Rust, all mocks cfg-gated.
+- **Stadial gate**: 1,638 tests, 0 clippy warnings, 0 fmt diffs. 173 `.rs` files, ~53,396 lines.
+
+#### S59: BTSP Phase 3 — Encrypted Channel (`btsp.negotiate` Server Handler)
+
+- **BTSP Phase 3 implementation**: Added `btsp.negotiate` JSON-RPC server handler per primalSpring v0.9.24+ spec. After a successful Phase 1/2 handshake, the client can negotiate a ChaCha20-Poly1305 encrypted channel. If the client doesn't negotiate or the server returns `{"cipher":"null"}`, the connection stays plaintext (backward-compatible).
+- **New module `btsp/phase3.rs`**: `Phase3Keys` struct with HKDF-SHA256 key derivation (labels `btsp-session-v1-c2s` / `btsp-session-v1-s2c` matching primalSpring), ChaCha20-Poly1305 encrypt/decrypt (12-byte random nonce per frame), `Phase3Cipher` enum with hyphenated wire names (`chacha20-poly1305`, `null`), `NegotiateParams`/`NegotiateResult` types, and `handle_negotiate` async handler.
+- **Post-handshake flow redesign**: UDS accept path now calls `serve_after_handshake` after Phase 1/2 completes (both JSON-line and length-prefixed paths). This reads the first JSON-RPC line: if `btsp.negotiate` → negotiate → enter `handle_encrypted_connection`; otherwise → chain the line back → enter standard `handle_newline_connection`. No disruption to existing plaintext clients.
+- **Encrypted connection handler**: `handle_encrypted_connection` reads length-prefixed frames (`[4B BE u32 len][encrypted payload]`), decrypts via `Phase3Keys`, dispatches through the standard `process_single_request` handler, encrypts the response, and writes it back as a length-prefixed frame.
+- **`BtspSession` extended**: Added `handshake_key: [u8; 32]` field (HKDF-derived from family seed) preserved from Phase 1/2 for Phase 3 key derivation.
+- **New dependency**: `chacha20poly1305 = "0.10"` (pure Rust, RustCrypto, ecoBin-compliant — no C, no `ring`).
+- **16 new tests**: Phase 3 cipher serde, key derivation determinism, client/server key mirroring, encrypt/decrypt round-trip, tamper detection, negotiate handler (chacha, unsupported cipher, session mismatch), full negotiate → encrypted round-trip.
+- **Deep debt audit**: comprehensive 8-category scan — all clean. Single fix: stale "local stub" trace message in `signing.rs` `verify_did()` corrected (function delegates through capability adapter, not a stub). Zero files >800L (max 724), zero `unsafe`, zero `async-trait`, zero `Arc<Mutex>`, zero `Box<dyn Error>`, zero TODO/FIXME/HACK, zero production mocks, all deps pure Rust.
+- **Stadial gate**: 1,562 tests (all-features, all pass), 0 clippy warnings, 0 fmt diffs, cargo deny clean, cargo doc clean (`-D warnings`). 168 `.rs` files, ~50,610 lines.
+
+#### S67: Composition Readiness — `payload_ref` Fix + Provenance Trio Pipeline Tests
+
+- **`payload_ref` wiring fix**: `append_event` and `append_batch` in `service.rs` now apply the `payload_ref` field to the `Vertex` via `VertexBuilder::with_payload()`. Previously, the JSON-RPC handler parsed `payload_ref` into `AppendEventRequest` but the service layer never applied it — the data was silently dropped. This is a **composition-critical fix**: downstream callers (skunkBat JH-5, provenance trio) sending `payload_ref` now get it stored on the vertex.
+- **`parse_payload_ref` helper**: 64-char hex strings are decoded as content hashes (size unknown = 0); all other strings are Blake3-hashed (deterministic content-addressed reference regardless of URI scheme).
+- **8 new composition tests**: (1) skunkBat security event forwarding via `Custom` event type with domain/metadata, (2) batch security event forwarding (3 events), (3) full provenance trio pipeline (`SessionStart` → `DataCreate` with `payload_ref` → `SessionEnd` → `merkle.root` → `session.get` vertex count), (4) hex hash `payload_ref` applied to vertex, (5) dehydrate produces loamSpine-compatible 64-char hex root matching `merkle.root`, (6) URI `payload_ref` applied to vertex via tarpc service, (7) hex hash `payload_ref` via tarpc service, (8) batch `payload_ref` via tarpc service.
+- **Composition interface validated**: `EventType::Custom { domain: "security", event_name }` is the correct extension point for skunkBat JH-5 Phase 3 forwarded events. `dag.dehydration.trigger` (not `dag.session.complete`) produces the Merkle root as 64-char hex — directly compatible with loamSpine's `session_hash` field (accepts hex since its dual-format update).
+- **Deep debt audit**: 12-category scan clean. Zero `unsafe`, zero `async-trait`, zero `Arc<Mutex>`, zero `Box<dyn Error>` in production, zero unwrap/expect in production, zero TODO/FIXME/HACK, zero `&Vec<`/`&String`, all deps pure Rust, all mocks cfg-gated.
+- **Stadial gate**: 1,631 tests, 0 clippy warnings, 0 fmt diffs. 173 `.rs` files, ~53,150 lines.
+
+#### S66: GAP-06 UDS Transport — Confirmed Resolved + Provenance Trio Test
+
+- **primalSpring audit (GAP-06, MEDIUM)**: "UDS is the canonical local transport. Blocks the provenance trio in 4 ludoSpring experiments." Investigation confirms this gap has been resolved since S23 (March 31) — UDS has been unconditional on Unix across all subsequent sessions. The gap was re-raised from stale tracker state (original ludoSpring V46 audit). Previous resolutions documented in S43.5 (transport diagnostics added to `doctor.rs`) and S58 (PG-45/GAP-06 re-confirmed resolved via PG-52).
+- **New provenance trio integration test**: `test_uds_provenance_trio_dag_workflow` — validates the exact ludoSpring workflow: `dag.session.create` → `dag.event.append` (GameEvent with chess move data) over UDS. This is the specific `dag.event.append` local call pattern that GAP-06 reported as blocked.
+- **README transport model section**: Added "Transport Model (GAP-06 resolved)" section with socat-style verification command for downstream springs. Documents the unconditional UDS posture, socket path, and family-scoped naming.
+- **Deep debt audit**: 12-category scan clean. Zero `unsafe`, zero `async-trait`, zero `Arc<Mutex>`, zero `Box<dyn Error>` in production, zero unwrap/expect in production, zero TODO/FIXME/HACK, zero `&Vec<`/`&String`, all deps pure Rust, all mocks cfg-gated.
+- **Stadial gate**: 1,623 tests, 0 clippy warnings, 0 fmt diffs. 173 `.rs` files, ~52,774 lines.
+
+#### S65: JH-1 Token Verification Framework + Scope Enforcement
+
+- **`TokenVerifier` trait**: Abstraction over token validation. `NoopVerifier` for tests (wildcard scope), `BearDogVerifier` for production (presence-only until JH-11 key distribution ships). Any future provider (e.g., local Ed25519 verification) plugs in via this trait.
+- **`_bearer_token` per-request extraction**: `process_single_request` now extracts `_bearer_token` from JSON-RPC `params` per the ecoPrimals convention, verifies it via the gate's `TokenVerifier`, and builds a per-request `CallerContext` enriched with `VerifiedClaims`. The `_bearer_token` field is stripped from params before method dispatch.
+- **`scope_permits_method()` function**: Glob-style scope matching (`*`, `domain.*`, exact match). When a verified token has scopes, the method gate enforces them — a token with `crypto.*` scope will be rejected for `dag.session.create`.
+- **Three-tier gate check**: (1) Public methods bypass, (2) verified token with matching scope proceeds, (3) unverified token or scope mismatch is rejected. In permissive mode, no-token calls are warned but allowed.
+- **Enriched `auth.check` response**: Now returns `{ authenticated, verified, enforcement, scopes?, subject?, expires_in? }` per primalSpring JH-1 spec. Fields `scopes`, `subject`, and `expires_in` are present only when a verified token provides them.
+- **20 new tests**: scope matching (wildcard, domain, exact, boundary, empty), token verifiers (noop, beardog, empty rejection), bearer extraction (present, missing, null, non-string), caller context verification, gate scope enforcement (covers, doesn't cover, unverified token), enriched auth.check responses (unauthenticated, verified with claims, expires_in).
+- **Deep debt audit**: 12-category scan clean. Zero `unsafe`, zero `async-trait`, zero `Arc<Mutex>`, zero `Box<dyn Error>` in production, zero unwrap/expect in production, zero TODO/FIXME/HACK, zero `&Vec<`/`&String`, all deps pure Rust, all mocks cfg-gated.
+- **Stadial gate**: 1,622 tests, 0 clippy warnings, 0 fmt diffs. 169 `.rs` files, ~52,186 lines.
+
+#### S64: Capability Naming Clarification (U4) + Registry Update
+
+- **primalSpring audit (U4, informational)**: rhizoCrypt was referenced as both `by_capability = "dag"` and `"provenance"` in external deploy graphs. Confirmed that rhizoCrypt's canonical capability domain is `"dag"` (`DOMAIN = "dag"` in `niche.rs`). The `"provenance"` domain belongs to sweetGrass; rhizoCrypt *consumes* provenance capabilities but does not *provide* them.
+- **README updated**: Added explicit canonical capability documentation — deploy graphs should use `by_capability = "dag"` when targeting rhizoCrypt.
+- **`capability_registry.toml` updated**: Added 3 `auth.*` methods from S62 JH-0 (auth.check, auth.mode, auth.peer_info). Registry now has 31 methods across 6 domains.
+
+#### S63: DID Semantic Alignment + Deep Debt Audit
+
+- **primalSpring audit (Low)**: DID vs raw `public_key` semantic gap — some wire type fields used `public_key` as a Rust field name while semantically carrying DID strings. Investigated entire codebase: rhizoCrypt's DAG model (`Vertex.agent`) is already fully DID-typed (`Did` newtype), signing uses DID strings throughout, no raw Ed25519 public keys are stored on DAG nodes.
+- **Field rename with wire compatibility**: `CryptoVerifyRequest.public_key` renamed to `signer_did` with `#[serde(rename = "public_key")]` — JSON wire format unchanged, Rust semantics aligned. `CryptoSignContractResponse.public_key` renamed to `attester_did` with same serde rename. Doc comments updated to clarify the DID-first posture.
+- **Deep debt audit**: comprehensive 12-category scan — all clean. Zero `unsafe` (compile-time `forbid(unsafe_code)`), zero `async-trait`, zero `Arc<Mutex>`, zero `Box<dyn Error>` in production, zero `.unwrap()`/`.expect()` in production (clippy deny), zero `todo!()`/`unimplemented!()`/`unreachable!()`, zero TODO/FIXME/HACK, zero `&Vec<`/`&String` params, zero `#[allow(dead_code)]` in `src/`, all deps pure Rust, all mocks cfg-gated. Max production file 675 lines (only test file exceeds 800 at 931 lines).
+- **Stadial gate**: 1,602 tests, 0 clippy warnings, 0 fmt diffs.
+
+#### S62: JH-0 — Method Gate Pre-Dispatch Authorization
+
+- **primalSpring audit (JH-0)**: projectNUCLEUS multi-user hardening pentest revealed that all primals accept unauthenticated calls to any method from any localhost process. primalSpring v0.9.25 shipped the reference implementation; rhizoCrypt now adopts the ecosystem-standard `MethodGate` pattern.
+- **New module `method_gate.rs`**: `MethodGate` struct with `check()` pre-dispatch method, `CallerContext` (bearer token + `ConnectionOrigin`), `EnforcementMode` (Permissive / Enforced), `classify_method()` returning `Public` / `Protected`.
+- **Method classification**: Public (always allowed without token): `health.*`, `ping`, `status`, `check`, `identity.get`, `capabilities.list`, `capability.list`, `primal.capabilities`, `lifecycle.status`, `auth.check`, `auth.mode`, `auth.peer_info`, `tools.list`, `mcp.tools.list`. Protected (require token when enforced): all `dag.*`, `tools.call`, and any unknown method.
+- **Two-gate architecture**: `handle_request` now runs Gate 1 (readiness, `-32002 NOT_READY`) then Gate 2 (authorization, `-32001 PERMISSION_DENIED`) before dispatch. Both gates bypass for public methods.
+- **Three new `auth.*` methods**: `auth.check` (returns authenticated/enforcement), `auth.mode` (returns current mode), `auth.peer_info` (returns origin/has_token). Registered in `METHOD_CATALOG` and `CAPABILITIES`.
+- **Error codes**: `PERMISSION_DENIED = -32001` (new), `UNAUTHORIZED = -32000` (renamed from `FORBIDDEN`, same numeric value). `NOT_READY = -32002` (unchanged from S61).
+- **Environment**: `RHIZOCRYPT_AUTH_MODE=enforced` activates enforcement. Default: `permissive` (logs violations but allows, backward-compatible). Accepts `enforced`/`enforce`/`strict`.
+- **Transport wiring**: gate and caller context threaded through all transport paths — Axum HTTP handler, UDS newline handler, BTSP encrypted handler, TCP auto-detect. UDS connections use `CallerContext::unix()`, TCP/HTTP use `CallerContext::loopback()`.
+- **23 new tests**: 15 unit tests in `method_gate.rs` (classification, enforcement modes, gate check, auth responses) + 8 handler integration tests (auth method responses, enforced rejection, public bypass, token pass-through, auth during cold start).
+- **Stadial gate**: 1,602 tests, 0 clippy warnings, 0 fmt diffs.
+
+#### S61: PG-60 — Readiness Gate on JSON-RPC Accept Path
+
+- **primalSpring audit (PG-60)**: Silent timeout on UDS connect — when rhizoCrypt's DAG subsystem isn't ready, the server accepts the socket connection but requests hang or return opaque internal errors. Downstream callers (hotSpring, primalSpring exp107) stall without feedback.
+- **Readiness gate**: All JSON-RPC methods that require the DAG subsystem are now gated behind `primal.state().is_running()`. If the primal isn't in `Running` state, the handler returns `{"error": {"code": -32002, "message": "not ready"}}` immediately. No socket hang, no opaque error.
+- **Always-allowed methods**: Health probes (`health.liveness`, `health.check`, `health.readiness`, `ping`, `health`, `health.metrics`), `identity.get`, `capabilities.list`, and `tools.list` bypass the gate — callers can always introspect liveness and capabilities even during startup.
+- **New error code**: `NOT_READY = -32002` added to `types::codes` (JSON-RPC server error range). `HandlerError::NotReady` variant maps to this code.
+- **Operator visibility**: Rejected requests emit a `warn!` log with the method name and current state.
+- **5 new tests**: handler-level readiness gate (DAG rejection, health allowlist, pass-through when running) + JSON-RPC response-level (`-32002` code verification, liveness bypass).
+- **Deep debt audit**: comprehensive scan across all categories — all clean. Zero files >800L (max 794, test file), zero `unsafe`, zero `async-trait`, zero `Arc<Mutex>`, zero `Box<dyn Error>` in production, zero `.unwrap()`/`.expect()` in production, zero `todo!()`/`unimplemented!()`/`unreachable!()`, zero TODO/FIXME/HACK, zero `&Vec<`/`&String` params, zero production mocks (all cfg-gated), zero `#[allow(dead_code)]` in production, all deps pure Rust (blake3 `pure` feature, no ring/openssl). `BoxFuture` justified for dyn-safe `ProtocolAdapter`. Feature flags clean. Clippy pedantic+nursery with `unwrap_used`/`expect_used` deny.
+- **Stadial gate**: 1,578 tests, 0 clippy warnings, 0 fmt diffs. 172 `.rs` files, ~51,620 lines.
+
+#### S60: Gap 9 — Dual-Format Hash Acceptance (Hex String + Byte Array)
+
+- **primalSpring audit (Gap 9)**: `dag.merkle.root` returns hex strings, but loamSpine/sweetGrass may send `[u8; 32]` byte arrays. All JSON-RPC hash input points now accept **both** hex strings (`"a1b2c3..."`) and JSON byte arrays (`[161, 178, 195, ...]`).
+- **New `parse_hash32` helper** in `params.rs`: branches on `Value::String` (hex decode) or `Value::Array` (collect u8 elements). Validates 32-byte length, 0-255 range per element.
+- **Updated handlers**: `dispatch_merkle_verify` (`root`), `dispatch_vertex_get`/`dispatch_vertex_children`/`dispatch_merkle_proof` (`vertex_id`), `dispatch_slice_checkout` (`checkout_vertex`), `parse_vertex_id_array` (`parents`). All accept either format.
+- **Backward-compatible**: existing hex-string callers work unchanged. New byte-array callers (loamSpine, sweetGrass) now interoperate.
+- **Port confirmation**: 9601/9600 on ironGate is operator config — rhizoCrypt defaults to 9400 (tarpc) / 9401 (JSON-RPC) and allows override via `RHIZOCRYPT_PORT`.
+- **Discovery escalation**: rhizoCrypt supports UDS filesystem convention (tier 3), manifests (tier 4), and TCP probing (tier 5) natively. Songbird registration (tier 1) active when TCP is enabled.
+- **10 new tests**: `parse_hash32` hex, byte array, equivalence, short hex rejection, wrong-length array, out-of-range byte, non-string/non-array rejection; `parse_vertex_id_value` hex and byte array; `parse_vertex_id_array` mixed formats.
+- **Stadial gate**: 1,573 tests, 0 clippy warnings, 0 fmt diffs. 168 `.rs` files, ~50,920 lines.
+
+#### S59e: Deep Debt Audit — Idiomatic Rust Pass
+
+- **Comprehensive deep debt audit** (8 categories): all clean — zero files >800L (max 724), zero `unsafe`, zero `async-trait`, zero `Arc<Mutex>`, zero `Box<dyn Error>`, zero `.unwrap()`/`.expect()` in production, zero TODO/FIXME/HACK, zero production mocks. `BoxFuture` pattern confirmed correct for dyn-safe `ProtocolAdapter` trait (RPITIT cannot replace it). Feature matrix clean. All error types use `thiserror`.
+- **Idiom fix**: `start_uds_listener` parameter changed from `Option<&String>` to `Option<&str>` (caller updated from `.as_ref()` to `.as_deref()`). Only non-idiomatic Rust pattern found in production code.
+- **Stadial gate**: 1,563 tests, 0 clippy warnings, 0 fmt diffs. 168 `.rs` files, ~50,790 lines.
+
+#### S59d: DID Semantic Tightening — `ProvenanceChain.agents` (`HashSet<String>` → `HashSet<Did>`)
+
+- **primalSpring Phase 58 audit** raised DID vs raw `public_key` semantic gap (LOW). Investigation confirmed the gap was **already resolved** in S48 (`CRYPTO_MODEL.md` "DID as Public Key Identifier — RESOLVED"). The `Did` newtype is used consistently at the API boundary; wire DTOs use `String` intentionally for cross-primal compatibility.
+- **One type-looseness fix**: `ProvenanceChain.agents` was `HashSet<String>` despite all values being DIDs from `VertexRef.agent: Option<Did>`. Changed to `HashSet<Did>` with `agent.clone()` instead of `agent.as_str().to_string()`. Wire-level types (`dehydration_wire.rs`) intentionally remain `String` for cross-primal serde compatibility.
+- **Phase 3 transport encryption (HIGH)** from the same audit was a **stale finding** — fully implemented in S59, integration-tested in S59b (guidestone 157/170), CI-hardened in S59c.
+- **Stadial gate**: 1,563 tests, 0 clippy warnings, 0 fmt diffs.
+
+#### S59c: Deep Debt Audit — CI Gate Alignment
+
+- **Comprehensive 8-category deep debt audit**: all categories clean. Zero files >800L (max 724), zero `unsafe`, zero `async-trait`, zero `Arc<Mutex>`, zero `Box<dyn Error>` in production, zero `.unwrap()`/`.expect()` in production, zero TODO/FIXME/HACK, zero mocks in production, zero dead code in production, all deps pure Rust.
+- **CI gap fixed**: `ci.yml` now matches documented stadial gate — added `cargo deny check bans` step and `--all-features` to both clippy and test. Previously CI ran clippy/test without `--all-features` (feature-gated code went unchecked) and didn't enforce `cargo-deny` (despite README/CHANGELOG documenting it as enforced). Test scope broadened from `--lib` to full workspace.
+- **Stadial gate**: 1,563 tests, 0 clippy warnings, 0 fmt diffs, cargo deny clean.
+
+#### S59b: Guidestone 157/170 — Phase 3 Transport Switch Integration Test
+
+- **primalSpring NUCLEUS validation** identified interop gap (guidestone 157/170): no integration test verified that after `btsp.negotiate` returns `cipher: "chacha20-poly1305"`, subsequent frames use encrypted framing (not cleartext JSON-RPC).
+- **Code audit confirmed logic is correct**: `serve_after_handshake` moves the stream into `handle_encrypted_connection` on `Ok(Some(keys))` — no path back to cleartext exists. The negotiate response itself is sent cleartext (per protocol), then framing switches to length-prefixed encrypted.
+- **New integration test `test_btsp_phase3_encrypted_transport_over_uds`**: exercises the complete path over a real `UnixStream` pair — Phase 2 handshake → `btsp.negotiate(chacha20-poly1305)` → two encrypted JSON-RPC round-trips (`health.check` + `dag.session.create`). Extracted `client_phase2_handshake`, `encrypted_roundtrip`, and `read_json_line_raw` helpers.
+- **Stadial gate**: 1,563 tests, 0 clippy warnings, 0 fmt diffs.
+
+#### S58: Phase 56 PG-45/GAP-06 Response — Already Resolved (S49), Doc Accuracy Fix
+
+- **primalSpring Phase 56** re-raised PG-45/GAP-06: "UDS socket accepts connections but returns no JSON-RPC response." This is the **same issue as PG-52**, which was resolved in S49.
+- **Investigation confirms S49 fix is fully in place**: the UDS accept loop in `uds.rs` routes all plain JSON-RPC (`{`/`[` first byte) to `handle_newline_connection` (full handler) — never to `handle_liveness_connection`. Test `test_plain_jsonrpc_data_methods_on_btsp_uds` locks this in.
+- **Root cause is a stale plasmidBin binary**: primalSpring's own `PRIMAL_GAPS.md` PG-52 resolution (line 1998) explicitly states "This also resolves PG-06 and PG-45" and recommends "Pull all three, rebuild plasmidBin binaries, reharvest."
+- **Doc accuracy fix**: `btsp/mod.rs` module doc and `newline.rs` `handle_liveness_connection` doc both described the **pre-S49** behavior (plain JSON-RPC → liveness-only). Updated to accurately reflect the post-S49 design: all UDS paths → full handler via filesystem-authenticated trust.
+- **No code changes to UDS routing.** All 1,546 tests pass. Clippy clean. Doc clean.
+
+#### S57: Deep Debt Audit + Documentation Reconciliation
+
+- **Comprehensive 8-category deep debt audit** — all categories clean: no files >800L (max 724), zero `unsafe` blocks (`forbid(unsafe_code)` on all crates), zero TODO/FIXME/HACK, zero `async-trait` macro, zero `Arc<Mutex>`, zero `Box<dyn Error>` in production, zero dead code allows, zero mocks in production, all external dependencies pure Rust.
+- **Hardcoded primal names in test fixtures** — `compute.rs` test fixtures still used `"toadstool-1"`, `"toadstool-2"`, `"toadstool-gpu"` (missed in S52b cleanup). Replaced with capability-agnostic `"compute-primary"`, `"compute-secondary"`, `"compute-gpu"`.
+- **Stale BTSP module doc comment** — `btsp/mod.rs` claimed "every incoming UDS connection must complete the 4-step handshake" which has been inaccurate since S49's three-way auto-detect. Updated to reflect the actual behavior: first-byte auto-detection with health probes allowed without handshake.
+- **Documentation reconciliation** — showcase demo counts updated across all docs: 65 → 72 (38 local + 34 inter-primal) in `README.md`, `CONTEXT.md`, `DEPLOYMENT_CHECKLIST.md`, `showcase/README.md`. Source line count ~49,900 → ~49,920. Deployment checklist date updated.
+- **Debris audit** — zero temp/backup files, zero empty files, zero untracked files, zero non-Rust source, zero TODO/FIXME in docs, `specs/archive/` properly labeled. Clean.
+- **Stadial gate**: 1,546 tests (all-features, 0 failures), 0 clippy warnings, 0 fmt diffs, cargo deny clean, cargo doc clean (`-D warnings`).
+
+#### S56: Stadial Gate Validation + CI Node 24 Migration
+
+- **Phase 56c stadial convergence**: primalSpring confirms rhizoCrypt is **clean** — not listed in remaining items. All 13 primals building standalone via plasmidBin. Zero HIGH blockers ecosystem-wide.
+- **Stadial gate validation**: 1,546 tests (all-features, 0 failures), 0 clippy warnings, 0 fmt diffs, cargo deny clean (advisories/bans/licenses/sources ok), cargo doc clean (with `-D warnings`), 167 `.rs` files, ~49,900 lines.
+- **Rustdoc fix**: `handle_liveness_connection` doc comment linked to private `UNAUTHENTICATED_METHODS` const — replaced with prose reference. Doc build now passes under `-D warnings`.
+- **CI Actions Node 24 migration** (June 2, 2026 deadline): `actions/checkout` v4→v5, `actions/cache` v4→v5, `codecov/codecov-action` v4→v6, `rustsec/audit-check` v1→v2. All use Node 24 runtime.
+- **Proactive debt scan**: zero `async-trait` macro, all `unwrap`/`expect` sanctioned by workspace `deny`, zero TODO/FIXME, zero production mocks outside `cfg(test)`.
+
+#### S55: Phase 56 GAP-22 Investigation — Capability Socket Symlinks
+
+- **primalSpring Phase 56** reported GAP-22: `dag.session.create` returns error on `dag-{family}.sock` (a symlink) but works on `rhizocrypt-{family}.sock` (direct).
+- **Investigation confirms rhizoCrypt has zero path-dependent behavior** — the UDS accept loop discards the peer address (`_addr`), the BTSP handshake carries no socket path, the three-way auto-detect branches on first byte only (not filename), and `FAMILY_ID` is used solely for bind-path construction and BTSP enforcement. No `readlink`, `canonicalize`, or socket-name validation exists anywhere.
+- **Root cause is external to rhizoCrypt** — most likely: (a) startup ordering (symlink created before rhizoCrypt binds, causing connection to stale/absent target), (b) `prepare_socket_path` removes the bind target before re-bind (symlink dangles briefly during restart), or (c) Neural API intercepting on the `dag-*` path and proxying with schema differences.
+- **Action needed from composition layer**: primalSpring should verify the symlink target is alive at connect time and check whether the exact JSON-RPC error is `-32000` FORBIDDEN (old liveness-gate bug, fixed in S49) which would indicate a stale binary.
+- No code changes to rhizoCrypt. Handoff updated in wateringHole.
+
+#### S54: Phase 55b Audit Response — Signing Delegation Confirmed, Hash Delegation Declined
+
+- **primalSpring Phase 55b audit** requested delegating BLAKE3 hashing to `crypto.blake3_hash` via Tower IPC, claiming rhizoCrypt is "the last Nest primal without Tower crypto delegation."
+- **Response**: The signing delegation ask was **already shipped in S52** — `sign_vertex_if_available()` calls `crypto.sign_ed25519` on every `dag.event.append`. This is the same pattern loamSpine (v0.9.16) and sweetGrass (v0.7.28) use.
+- **Hash delegation declined** — BLAKE3 is deterministic (no key material), delegation adds zero cryptographic value while imposing 1000x+ IPC cost on the hot path (~80ns local → ~100-500μs UDS). The Ed25519 vertex signature already provides the audit trail.
+- Neither loamSpine nor sweetGrass delegates hashing — both delegate only signing. The audit conflated signing with hashing.
+- wateringHole handoffs updated: `UPSTREAM_EVOLUTION_BLURBS_PHASE55B`, `PRIMALSPRING_V0921_PHASE55B_UPSTREAM_GUIDANCE`, `NUCLEUS_TWO_TIER_CRYPTO_MODEL` (all three Nest primal sections reconciled to reflect current state).
+- **DAG payload encryption** noted as valid future roadmap item (low priority — ephemeral data, protected by UDS + BTSP).
+
+#### S53: Documentation Reconciliation + Debris Audit
+
+- **Root docs reconciled** — `CONTEXT.md` source line count updated (~49,700 → ~49,900), `showcase/README.md` test count corrected (1,540 → 1,546), `DEPLOYMENT_CHECKLIST.md` date and session references updated
+- **wateringHole handoffs reconciled**:
+  - `PRIMAL_REGISTRY.md` — rhizoCrypt test count 1,441 → 1,546, BTSP Phase 1 → Phase 2, delegated vertex signing (S52) noted
+  - `NUCLEUS_TWO_TIER_CRYPTO_MODEL.md` — rhizoCrypt section updated from "no delegation" to reflect S52 implementation (Ed25519 vertex signing via crypto provider, graceful degradation)
+  - `PRIMALSPRING_V0920_PHASE55_CRYPTO_COMPOSITION_HANDOFF_APR28_2026.md` — rhizoCrypt gap marked RESOLVED (S52)
+- **Debris audit** — no orphan files, no stale scripts, no empty files, no tracked build artifacts, no TODO/FIXME markers in docs. Showcase 65 demos intact, `specs/archive/` properly labeled. Clean.
+
+#### S52b: Deep Debt Audit — Agnostic Test Fixtures
+
+- **Comprehensive audit**: All 167 `.rs` files scanned across 8 deep debt categories — zero unsafe blocks, zero TODO/FIXME, zero `Box<dyn Error>` in production, zero `async-trait` macro, zero mocks in production, all deps pure Rust (blake3 confirmed `CARGO_FEATURE_PURE` via build output).
+- **Test fixture primal names cleaned** — replaced all vendor-specific service IDs in test code with capability-agnostic names:
+  - `registry_tests.rs`: "bearDog"→"crypto-provider", "nestGate"→"storage-provider", "toadStool"→"compute-provider", "sweetGrass"→"provenance-provider", "bearDog1/2"→"signer-alpha/beta"
+  - `mocks.rs`: test fn names `test_mock_beardog_*`→`test_mock_signing_*`, `test_mock_nestgate_*`→`test_mock_payload_storage_*`, `test_mock_loamspine_*`→`test_mock_permanent_storage_*`
+  - `signing_tests.rs`: "beardog-hsm"→"signing-hsm", comment "BearDog-aligned"→"signing-provider-aligned"
+  - `unix_socket.rs`: "beardog.sock"→"signing.sock"
+  - `discovery_failures.rs`: chaos test fixtures "bearDog"→"crypto-provider"/"signer-N"
+  - `songbird/tests_discovery.rs`: "beardog-*"→"crypto-*", "loamspine"→"ledger-provider", "nestgate"→"storage-provider"
+  - `permanent.rs`: "loamspine-*"→"ledger-*"
+  - `storage.rs`: "nestgate-*"→"storage-*"
+- **Only remaining primal-name references**: `niche_tests.rs` deny-list guardrail (intentional), vendor-specific HTTP client types/files (legitimate API surface)
+- Test count: 1,546 (all-features), 0 failures, 0 clippy warnings
+
+#### S52: Delegated Vertex Signing on Append
+
+- **`dag.event.append` now delegates signing to the discovered crypto provider** — when a signing provider (e.g. BearDog) is available and the vertex carries an `agent` DID, the vertex's canonical CBOR bytes are signed via `crypto.sign_ed25519` and the Ed25519 signature is attached before storage. This makes DAG integrity independently verifiable by any party holding the agent's public key.
+- **Lazy signing client** — `RhizoCrypt::signing_client()` resolves the `Capability::Signing` provider once (via `tokio::sync::OnceCell`) and caches it. Standalone mode pays zero discovery cost.
+- **Graceful degradation** — vertices without an agent, or without a signing provider, remain unsigned (matching pre-composition behavior).
+- **`sign_vertex_if_available` helper** — service-layer function wires signing into `append_event` and `append_batch` without modifying the core `append_vertex` hot path.
+- **`specs/CRYPTO_MODEL.md` updated** — vertex signing flow documented with architecture diagram; delegated operations table expanded.
+- **5 new tests**: `test_signing_client_none_without_provider`, `test_signing_client_cached_after_first_call`, `test_vertex_unsigned_without_signing_provider` (core); `test_append_event_unsigned_without_provider`, `test_append_batch_unsigned_without_provider` (RPC service)
+- Test count: 1,371 (default), 1,546 (all-features)
+
+#### S51: FAMILY_SEED Documentation + EOF Wire Format Test
+
+- **`FAMILY_SEED` / `RHIZOCRYPT_FAMILY_SEED` documented in `docs/ENV_VARS.md`** — primalSpring convergence validation identified that downstream teams hit "no family seed" errors when launching with family-scoped sockets without this env var. Accepts hex, base64, or plain UTF-8.
+- **Wire format note** — `\n`-terminated request requirement documented in ENV_VARS.md UDS section with examples
+- **New test**: `test_newline_eof_without_trailing_newline` — confirms EOF-without-`\n` delivers response when write half is shut down (validates primalSpring trio integration guide finding)
+- Test count: 1,368 (default), 1,541 (all-features)
+
+#### S50: Deep Debt — UDS Test Extraction + Agnostic Service IDs
+
+- **`uds.rs` refactored** — test module (472 lines) extracted to `uds_tests.rs` via `#[path]`; production code now 330L (was 802L, below 800L threshold)
+- **Hardcoded primal names cleaned** — test service IDs renamed: `bearDog1`/`bearDog2` → `signer-primary`/`signer-fallback` (resolution.rs), `beardog.sock` → `signing.sock` (adapters/mod.rs)
+- **Production log agnostic** — signing.rs tracing message no longer references specific primals
+- **Comment cleanup** — `niche.rs` "Squirrel AI" → "AI coordination layer", `loamspine_rpc.rs` comment made agnostic
+- 0 clippy warnings, 1,367 tests passing, ~49,700 source lines
+
+#### S49: PG-52 — UDS Data Methods Blocked by Liveness Gate (HIGH)
+
+- **Root cause**: S45.1 introduced first-byte auto-detect that routed ALL non-BTSP JSON-RPC on UDS to `handle_liveness_connection`, which only allows `health.check`, `capability.list`, and probes — all `dag.*` methods were rejected with FORBIDDEN (-32000). 4 springs (hotSpring, wetSpring, neuralSpring, healthSpring) reported `dag.session.create` returns empty/reset.
+- **Fix**: UDS now routes plain JSON-RPC to the full handler (`handle_newline_connection`). UDS is filesystem-authenticated and family-scoped (BTSP Phase 1), so BTSP Phase 2 handshake is not required for local IPC. BTSP handshake path remains intact for clients that perform it.
+- **3 new integration tests** — `test_plain_jsonrpc_data_methods_on_btsp_uds` (exact PG-52 repro), `test_dag_method_suite_on_btsp_uds` (create + health + caps), `test_batch_jsonrpc_on_btsp_uds` (batch with data methods) (test count: 1,540)
+- `handle_liveness_connection` retained for potential TCP-side use
+
+#### S48b: Deep Debt Audit — Clippy Clean + Agnostic Comment Fix
+
+- **9 clippy warnings resolved** — `map_or`→`is_some_and` (types.rs), borrowed expression deref (btsp/server.rs, uds.rs), `doc_markdown` backticks on BTSP handshake types (uds.rs)
+- **Hardcoded primal name removal** — "Squirrel AI coordination" → "AI coordination layer" in `niche.rs`
+- Full deep debt audit confirms: zero files >800L, zero unsafe, zero TODO/FIXME, zero `async-trait`, zero `Arc<Mutex>`, zero `Box<dyn Error>` in production, zero `unwrap`/`expect` in production, all mocks behind `cfg(any(test, feature="test-utils"))`, all deps pure Rust
+
+#### S48: DID vs Raw Public Key Semantic Alignment
+
+- **`Did::is_well_formed()`** — new validation method checks `did:<method>:<id>` format
+- **`Did::new()` debug_assert** — catches non-DID strings in dev/test builds
+- **Wire DTO test cleanup** — `CryptoSignContractResponse` tests now use `did:key:` format instead of raw hex strings, aligning with documented semantics
+- **Trace diagnostics** — `request_attestation` now logs the `public_key` returned by the signing provider for operational visibility
+- **CRYPTO_MODEL.md** updated with type-level enforcement status
+- Lockfile audit confirms: no `ring`, `sled`, `aws-lc`, or `openssl` ghost stanzas (test count: 1,537)
+
+#### S47: FAMILY_SEED Encoding Alignment — Cross-Primal BTSP Compatibility
+
+- **Seed encoding normalization** — `read_family_seed` now matches primalSpring's `raw_family_seed_from_env` exactly: hex seed (len ≥ 32, even, all hex digits) → raw UTF-8 bytes; valid base64 → decoded bytes; otherwise → raw UTF-8 bytes. Previously always used raw UTF-8, causing key divergence when the harness generates base64-encoded seeds.
+- **Root cause**: BTSP handshake step 3→4 ("no HandshakeComplete") — primalSpring base64-decoded the seed while rhizoCrypt used the raw string, producing different HKDF inputs and mismatched HMACs
+- **6 new tests** — hex seed normalization, base64 seed decode, plain string passthrough, short-hex edge case, cross-primal HKDF compatibility (hex), cross-primal base64 seed compatibility (test count: 1,535)
+- HKDF parameters confirmed matching: `salt=b"btsp-v1"`, `info=b"handshake"`, HMAC order `challenge||client_pub||server_pub`
+
+#### S46b: Clippy Pedantic Clean + Hardcoded Primal Name Removal
+
+- **Clippy pedantic+nursery clean** — resolved sole `similar_names` warning (`peek` → `probe` in `handle_tcp_connection`)
+- **Hardcoded primal name removal** — removed "BearDog/Squirrel" from `UNAUTHENTICATED_METHODS` doc comment, replaced with ecosystem-generic language
+- Full audit confirms: zero production files over 800 lines, zero hardcoded primal strings, zero unsafe blocks, zero TODO/FIXME markers
+- All clones audited (DashMap guards, Arc, HashMap keys, method retry) — all justified
+- Mock isolation verified: `#[cfg(any(test, feature = "test-utils"))]` on all `Mock*` types
+
+#### S46: BTSP Handshake Robustness — Error Reporting + UDS Integration Tests
+
+- **Descriptive error responses** — `send_handshake_error_jsonline` now accepts a `reason` parameter; the actual `HandshakeError` message flows to the client instead of the previous hardcoded "family_verification"
+- **Explicit writer shutdown** — both JSON-line and length-prefixed error paths now call `writer.shutdown()` after sending the error, preventing OS-level RST before the client receives the error JSON line
+- **2 new UDS integration tests** — `test_btsp_jsonline_handshake_over_uds` (full 4-step handshake over real `UnixStream::pair()` + post-handshake JSON-RPC round-trip) and `test_btsp_jsonline_invalid_key_returns_error` (socat-style invalid key returns structured error, not ECONNRESET) (test count: 1,529)
+- Root cause: primalSpring audit "relay to BearDog" does not apply — rhizoCrypt is self-sovereign (no BearDog delegation)
+
+#### S45.2: BTSP Wire-Format Alignment — JSON-Line Interop (primalSpring Phase 45b)
+
+- **JSON-line BTSP handshake** — `accept_handshake_jsonline` performs the same 4-step X25519 + HMAC-SHA256 handshake using newline-delimited JSON instead of length-prefixed binary frames, matching primalSpring's wire format
+- **Wire-compatible types** — `ClientHelloWire`, `ServerHelloWire`, `ChallengeResponseWire`, `HandshakeCompleteWire`, `HandshakeErrorWire` with base64-encoded byte fields and `protocol: "btsp"` discriminator
+- **Three-way UDS auto-detect** — `handle_uds_connection` now reads the full first line when first byte is `{`, then:
+  - `"protocol":"btsp"` → JSON-line BTSP handshake, then full JSON-RPC
+  - `"jsonrpc"` → liveness-only JSON-RPC (S45.1 path)
+  - Non-`{` first byte → length-prefixed BTSP handshake (internal path)
+- **JSON-line framing** — `read_json_line` / `write_json_line` in `btsp/framing.rs`; byte-by-byte reading avoids BufReader buffering issues in multi-step handshakes
+- **15 new tests** — JSON-line handshake round-trip, wrong-seed rejection, wire type serde, base64 decode edge cases, framing multi-step (test count: 1,527)
+- **Pre-existing clippy fixes** — removed 3 `needless_return` warnings in `tarpc.rs` (cfg-gated feature blocks)
+- **Resolves primalSpring Phase 45b BTSP escalation**: `{"protocol":"btsp",...}\n` is no longer misclassified as invalid JSON-RPC
+
+#### S45.1: BTSP Liveness Passthrough — First-Byte Auto-Detect (Phase 45 Item #3)
+
+- **First-byte auto-detect on UDS** — when BTSP is enforced, the UDS handler now peeks the first byte: `{`/`[` routes to liveness-only JSON-RPC, anything else proceeds with BTSP handshake. Matches the ecosystem pattern (BearDog/Squirrel PG-35, PG-30)
+- **Liveness-only handler** (`handle_liveness_connection`) — allows `health.check`, `health.liveness`, `capability.list`, `identity.get`, and other probe methods without BTSP; rejects data methods (`dag.*`, etc.) with `-32000 FORBIDDEN` + hint
+- **`UNAUTHENTICATED_METHODS` allowlist** — single source of truth for which methods bypass BTSP
+- **`codes::FORBIDDEN` (-32000)** — new JSON-RPC error code for authentication-required methods
+- **4 new tests** — liveness allows health.check, allows capability.list, rejects data methods, rejects batch requests (test count: 1,512)
+- **Resolves primalSpring Phase 45 audit item #3**: plain `health.check` probes no longer fail with EPIPE/ECONNRESET on BTSP-enforced sockets
+
+#### S43.8: TCP Resolution Dedup + Doctor Manifest + Integration Test
+
+- **Deduplicate `resolve_bind_addr`** — TCP address resolved once in `run_server_with_ready()` and passed to both manifest publication and `serve_with_tcp()`; eliminates redundant resolution and `.ok()` vs `?` inconsistency
+- **Doctor manifest check** — `check_transport()` now verifies `rhizocrypt.json` presence at the expected `$XDG_RUNTIME_DIR/biomeos/` path, reporting pass/warn for PG-32 discoverability
+- **Manifest lifecycle integration test** — `test_manifest_publish_lifecycle` validates publish → discover_by_capability → unpublish round-trip with real `CAPABILITIES` from `METHOD_CATALOG` (test count: 1,512 after S45.1)
+
+#### S43.7: Manifest-Based Discovery — PG-32 Resolution
+
+- **Capability manifest publish on startup** — `run_server_with_ready()` now publishes `$XDG_RUNTIME_DIR/biomeos/rhizocrypt.json` containing UDS socket path, optional TCP address, and all 28 capabilities from `METHOD_CATALOG`; springs calling `discover_by_capability("dag")` now find rhizoCrypt's socket
+- **Manifest unpublish on shutdown** — `unpublish_manifest("rhizocrypt")` called on every exit path (graceful shutdown, TCP + UDS combined)
+- **`start_uds_listener` returns socket path** — enables manifest publication with the actual bound socket path
+- **`publish_manifest` / `unpublish_manifest` re-exported** from `discovery` module for service-layer access
+
+#### S43.6: Doc Reconciliation + Showcase Binary Alignment
+
+- **Doctor TCP env var alignment** — transport message now lists all three opt-in env vars matching `has_explicit_tcp_config()`
+- **Showcase binary names** — remaining `songbird-rendezvous` references → `songbird` (UniBin canonical) in `start-songbird.sh`, songbird README
+- **Showcase paths** — `../../../bins/` → `${PRIMAL_BINS:-../../../primalBins}` in nestgate demo
+- **Metrics** — line count ~48,600
+
+#### S43.5: Transport Diagnostics (ludoSpring GAP-06 Response)
+
+- **`doctor` transport checks** — new `check_transport()` reports UDS socket path + status, TCP opt-in state, and BTSP enforcement mode; resolves ludoSpring GAP-06 ("TCP-only, no UDS") which was stale documentation — UDS has been unconditional since S23/S37
+
+#### S43.4: Final Debt Sweep
+
+- **tarpc one-way fire-and-forget** — `let _ = client.call(…)` in `TarpcAdapter::call_oneway_json` evolved to `if let Err(e) … { debug!(…) }` with structured `tracing` for production observability
+- **`deny.toml` wildcard policy** — `wildcards = "warn"` → `"allow"` for workspace path dependencies (false-positive noise in monorepo layout; version wildcards remain caught by advisory/ban checks)
+
+#### S43.3: async-trait Removal + DID Semantic Closure
+
+- **`async-trait` dependency removed** — 6 direct usages replaced with manual `Pin<Box<dyn Future>>` desugaring via `BoxFuture` type alias; `ProtocolAdapter` remains object-safe (`Arc<dyn ProtocolAdapter>`) without the proc macro
+- **DID → `public_key` semantic gap closed** — documented that `did:key:` strings are the canonical wire format for the `public_key` field in `crypto.verify_ed25519`; `BearDog` resolves `did:key:` → raw Ed25519 transparently; formally closed in `CRYPTO_MODEL.md`
+- **Wire DTO docs** — `CryptoVerifyRequest.public_key` and `CryptoSignRequest.key_id` doc comments updated to reflect DID string semantics
+
+#### S43.2: Lint Policy, Dependency Hygiene, Format Sweep
+
+- **`#[allow(unused_imports)]` → `#[expect]`** in `metrics.rs` — aligned with project lint policy (prefer `#[expect]` over `#[allow]`)
+- **`cargo update`** — all workspace dependencies updated to latest compatible semver; resolved RUSTSEC-2026-0007 (`opentelemetry_sdk` advisory)
+- **`deny.toml`** — removed stale RUSTSEC-2026-0007 advisory ignore (resolved by dep update); updated evolution comments
+- **`cargo fmt`** — applied across 6 files with formatting drift from prior sessions (signing.rs, signing_tests.rs, niche.rs, dehydration_ops.rs, capabilities.rs)
+
+#### S43: Comprehensive Audit + Deep Debt Evolution
+
+- **`CRYPTO_MODEL.md`** — canonical spec: rhizoCrypt delegates all asymmetric crypto to BearDog via IPC; Blake3 for internal integrity only
+- **Shared `DiscoveryRegistry`** — `RhizoCrypt` struct holds `Arc<DiscoveryRegistry>` initialized once and shared across dehydration attestation + permanent storage commit; eliminated orphan per-call registries
+- **`collect_attestations`** — uses `request_attestation()` for proper round-trip attestation (not manual `sign` + `verified: true`)
+- **`niche.rs` `METHOD_CATALOG`** — single source of truth (`MethodSpec` struct) replaces 4× redundant lists (`CAPABILITIES`, `SEMANTIC_MAPPINGS`, `COST_ESTIMATES`, `CAPABILITY_DOMAINS`); derived via `LazyLock`
+- **Prometheus export** — `infallible_write` helper replaced with idiomatic `let _ = writeln!()` pattern for `String` (infallible `fmt::Write`)
+- **Shutdown error logging** — `let _ =` during graceful shutdown evolved to `if .is_err() { debug!(...) }` for traceability
+- **`capability_registry.toml`** — domain mismatch fixed (`capability` → `capabilities` matching `METHOD_CATALOG`)
+
+#### S43: Smart Test File Refactoring (>800 line files)
+
+- **`service_integration.rs`** (960 → 231 + 173 + 310 + 268 LOC): split into `mod.rs`, `doctor.rs`, `client_and_config.rs`, `uds.rs`
+- **`store_redb_tests_advanced.rs`** (861 → 594 + 272 LOC): coverage tests extracted to `store_redb_tests_coverage.rs`
+- **`loamspine_http_tests.rs`** (858 → 303 + 512 LOC): wiremock tests extracted to `loamspine_http_tests_wiremock.rs`
+- **`rhizocrypt_tests.rs`** (805 → 463 + 355 LOC): extended tests extracted to `rhizocrypt_tests_extended.rs`
+- **`niche.rs`** (654 → 404 compact; 625 after rustfmt): `MethodSpec` + `METHOD_CATALOG` eliminated structural redundancy
+
+#### S43: Documentation Refresh
+
+- **README.md** — tests 1,512, coverage 93.88%, 170 `.rs` files, `METHOD_CATALOG` mention, `CRYPTO_MODEL.md` link, demo count 65
+- **CONTEXT.md** — registry note corrected (28 methods in `METHOD_CATALOG`), file/line counts updated
+- **`specs/00_SPECIFICATIONS_INDEX.md`** — added Security & Cryptography section with `CRYPTO_MODEL.md`
+- **showcase `Cargo.toml`** — `tokio = "full"` → explicit features (ecoBin compile efficiency)
+- **Test harness** — module-level `#![allow(dead_code)]` narrowed to targeted per-struct `#[allow]`
+
+### Added
+
+- `specs/CRYPTO_MODEL.md` — canonical crypto delegation pattern
+- `crates/rhizo-crypt-core/src/store_redb_tests_coverage.rs`
+- `crates/rhizo-crypt-core/src/clients/loamspine_http_tests_wiremock.rs`
+- `crates/rhizo-crypt-core/src/rhizocrypt_tests_extended.rs`
+- `crates/rhizocrypt-service/tests/service_integration/` directory module (4 files)
+
+**Metrics**
+- 1,512 tests passing (0 failures)
+- 170 `.rs` files, ~48,600 lines
+- `cargo deny check` — advisories ok, bans ok, licenses ok, sources ok (RUSTSEC-2026-0007 resolved)
+- Max file: 724 lines (limit 1,000)
+- Zero clippy warnings, zero unsafe blocks, zero production unwrap/expect
+- 93.88% line coverage (CI gate: 90%)
+
+## [0.14.0-dev] - 2026-04-13 (sessions 38–41)
+
+### Changed
+
+#### S38: Handler Domain Split + Metrics Extraction
+
+- **JSON-RPC handler** (583 lines) refactored into 11 domain modules: `session`, `events`, `vertex`, `merkle`, `slice`, `dehydration`, `health`, `capabilities`, `tools`, `params` + `mod.rs` dispatch (102 lines)
+- **Metrics** (530 lines) split into `histogram.rs` (117) + `prometheus.rs` (113) + `metrics.rs` (319)
+- Removed overly broad `pub use rhizo_crypt_core;` / `pub use rhizo_crypt_rpc;` from service crate
+- `register_with_discovery` now takes `&str` (avoids allocation)
+
+#### S38: Doc Evolution
+
+- Production doc comments evolved from vendor-specific to capability-generic language
+- `provenance/client.rs`, `niche.rs`, `config.rs`, `safe_env/mod.rs`, `dehydration_wire.rs`, `integration/mod.rs` — primal names → generic capability language
+
+#### S39: Stale Metrics Reconciliation + Debris Removal
+
+- Deleted stale `showcase/00_START_HERE.md` (duplicate entry point)
+- Fixed test counts 1,441 → 1,510 across `DEPLOYMENT_CHECKLIST.md`, `showcase/README.md`
+- Corrected showcase demo catalog: 36 local + 29 inter-primal = 65 demo scripts
+- Fixed version strings `v0.14.0` → `v0.14.0-dev` in service crate README
+
+#### S40: Canonical EventType Reference
+
+- Created `specs/EVENT_TYPE_REFERENCE.md` — 27-variant wire format reference for domain springs
+- Corrected field name inaccuracies from primalSpring downstream docs
+- Enhanced `event.rs` module/type rustdoc with wire format and spec cross-reference
+
+#### S41: Supply Chain Tightening
+
+- Removed unmatched license allowances from `deny.toml` (ISC, Zlib, CDLA-Permissive-2.0, AGPL-3.0-only)
+- Full audit confirms: zero production files over 800 lines, zero hardcoded primal strings, zero unsafe blocks, zero TODO/FIXME markers
+
+### Added
+
+- **13 new source files** (handler domain modules + histogram + prometheus)
+- `specs/EVENT_TYPE_REFERENCE.md` — canonical `dag.event.append` wire format
+
+**Metrics**
+- 1,510 tests passing (up from 1,502), 0 failures
+- 160 `.rs` files (up from 148), SPDX on all
+- `cargo deny check` — advisories ok, bans ok, licenses ok, sources ok
+- Max production file: 664 lines (limit 1,000)
+
+## [0.14.0-dev] - 2026-04-12 (sessions 35–37)
+
+### Changed
+
+#### S36: Provenance Trio Debt Resolution
+
+- Completed provenance stub (full `WireWitnessRef` round-trip)
+- TCP hardening for inter-primal IPC (timeout, keep-alive)
+- Capability drift guard (verify advertised capabilities match actual handler)
+
+#### S37: UDS Unconditional, TCP Opt-in (LD-06)
+
+- **UDS unconditional** on Unix at `$XDG_RUNTIME_DIR/biomeos/rhizocrypt.sock`
+- **TCP opt-in** via `--port` or `RHIZOCRYPT_PORT` env var
+- New `has_explicit_tcp_config()` helper for robust TCP activation
+- Extracted `serve_with_tcp` to reduce `run_server_with_ready` line count
+
+#### S35: Documentation Cleanup
+
+- Updated all root docs, deployment checklist, deployment graphs
+- SPDX compliance to 148/148 `.rs` files (at that point)
+
+### Added
+
+- Witness chain test (`e2e/witness_roundtrip.rs`)
+- 8 new tests across provenance and TCP hardening
+
+**Metrics**
+- 1,510 tests passing (up from 1,502)
+- UDS + TCP dual-transport operational
+
+## [0.14.0-dev] - 2026-04-11 (session 34)
+
+### Changed
+
+#### Deep Debt: Compile Efficiency — Feature Flag Narrowing
+
+- **tokio**: `"full"` → explicit `["rt-multi-thread", "macros", "net", "sync", "time", "io-util", "signal", "fs"]` — drops `io-std`, `parking_lot`, `process`, `tracing` features
+- **tarpc**: `"full"` → `["serde-transport-bincode", "tcp"]` — drops unused JSON transport, Unix transport
+- **hyper**: `"full"` → `["http1", "client", "server"]` — drops unused HTTP/2
+- **bincode**: Deduplicated spec in `rhizo-crypt-core` to use `workspace = true` instead of inline version
+
+#### Deep Debt: Hardcoding Neutralization
+
+- **`loamspine_http.rs`**: Error/log strings neutralized from "LoamSpine" to "permanent storage provider" — primal-agnostic IPC
+
+### Added
+
+- **31 new tests** across 4 previously uncovered modules:
+  - `service_types.rs` (8): capability descriptors, OnceLock caching, DTO serialization
+  - `btsp/types.rs` (10): protocol constants, cipher serde, handshake messages, error display
+  - `songbird/config.rs` (9): defaults, env parsing, address config, capability advertise
+  - `discovery/endpoint.rs` (4): empty capabilities, clone, static/owned service IDs
+
+**Metrics**
+- 1,502 tests passing (up from 1,471)
+
+## [0.14.0-dev] - 2026-04-11 (session 33)
+
+### Changed
+
+#### Trio IPC Stability Hardening
+
+- **TCP_NODELAY** set on all accepted TCP connections in `handle_tcp_connection` — eliminates Nagle-algorithm latency on small JSON-RPC frames, aligning with sweetGrass flush+NODELAY pattern
+- **flush-on-write** audit confirmed: `newline.rs` already flushes after every `write_all`, BTSP framing likewise — no gap
+- **Tower Atomic TCP opt-in** audit confirmed: TCP JSON-RPC is always-on by default, no stale branches or unmerged transport work
+
+### Added
+
+- **1 new test**: `test_tcp_nodelay_set_on_connection` in `rpc_integration.rs` — verifies TCP connections receive responses under NODELAY
+
+**Metrics**
+- 1,471 tests passing (up from 1,470)
+
+## [0.14.0-dev] - 2026-04-11 (session 32)
+
+### Changed
+
+#### Deep Debt Cleanup: Constants Centralization & Idiomatic Evolution
+
+- **17 new constants** in `constants.rs`: `DEFAULT_GC_INTERVAL`, `DEFAULT_EXPIRATION_GRACE`, `DEFAULT_ATTESTATION_TIMEOUT`, `DEFAULT_DEHYDRATION_RETRY_DELAY`, `DEFAULT_MAX_PAYLOAD_BYTES`, `DEFAULT_SESSION_MAX_DURATION`, `DEFAULT_RETRY_MAX_BACKOFF`, `CIRCUIT_BREAKER_FAILURE_THRESHOLD`, `CIRCUIT_BREAKER_COOLDOWN`, `DEFAULT_HEARTBEAT_INTERVAL`, `DEFAULT_HEALTH_CHECK_INTERVAL`, `ADVERTISED_CAPABILITIES`, `LOCALHOST_HOSTNAME`
+- **9 files migrated** from hardcoded literals to constants: `config.rs`, `session.rs`, `loamspine_http.rs`, `adapters/http.rs`, `adapters/unix_socket.rs`, `songbird/config.rs`, `discovery/endpoint.rs`, `resilience.rs` (CircuitBreaker + RetryPolicy)
+- **Songbird capability registration** uses `ADVERTISED_CAPABILITIES[0]` instead of hardcoded `"dag-engine"`
+
+#### Large File Refactoring (Cohesion-Based)
+
+- **`service.rs` split** (687 → 485 LOC): Wire types + capability descriptors extracted to `service_types.rs` (222 LOC) — types change independently from RPC behavior, improving compile-time boundaries
+- **`store.rs` DagBackend dispatch** (676 → 631 LOC): 114 lines of repetitive `match` arms replaced with `dispatch_backend!` macro
+
+#### Clone Reduction & Zero-Copy
+
+- **`cached_capability_descriptors()`** now returns `&'static [CapabilityDescriptor]` instead of `&'static Vec<_>` — eliminates `.clone()` allocation on every `capabilities.list` call
+- **HTTP client constructors** in `loamspine_http.rs` and `adapters/http.rs` now reference `CONNECTION_TIMEOUT` constant
+
+#### Idiomatic Rust 2024
+
+- **`safe_env/mod.rs`**: `.map(…).unwrap_or(false)` → `.is_ok_and(…)`
+- **`config.rs`**: `.map(…).unwrap_or(true)` → `.map_or(true, …)`
+- **`rhizocrypt/mod.rs`**: `for`/`push` GC sweep loop → `.filter().map().collect()` iterator chain
+- **`store.rs`**: Removed redundant double-nesting and unnecessary scope blocks in `put_vertex`/`stats`
+
+#### Dependency Evolution
+
+- **Removed unused `toml` workspace dependency** (not referenced by any crate)
+- Dependency audit confirmed: stack is already ecoBin-compliant — zero application C deps, `deny.toml` bans openssl/ring/reqwest/sqlite
+
+### Added
+
+- **9 new tests**: BTSP `mod.rs` (5 — `read_family_seed` env variants, `is_btsp_required` dev mode), UDS (4 — `socket_path` accessor, idempotent cleanup, sequential requests, parent dir creation)
+
+**Metrics**
+- 1,470 tests passing (up from 1,456), 147 `.rs` files (up from 146), max file 664 lines (down from 687)
+- Zero clippy warnings, zero unsafe blocks, zero TODOs in production code
+- ~93% line coverage (`llvm-cov`)
+
+## [0.14.0-dev] - 2026-04-09 (session 31)
+
+### Added
+
+#### BTSP Phase 2: Server-Side Handshake Enforcement
+- **`btsp/` module** in `rhizo-crypt-rpc`: types, framing, and server handshake implementation
+- **4-step X25519 + HMAC-SHA256 handshake** enforced on every UDS accept when `FAMILY_ID` is set
+- **Length-prefixed framing codec** (4-byte BE u32 header, 16 MiB max frame)
+- **`BtspServer::accept_handshake()`**: server-side protocol with ephemeral keypairs, challenge-response, cipher negotiation, session key derivation via ECDH + HKDF
+- **`BtspSession`**: negotiated cipher, session ID, directional keys with `zeroize(drop)`
+- **Environment detection**: `is_btsp_required()` + `read_family_seed()` for production/dev mode dispatch
+- **UDS accept wiring**: `handle_uds_connection()` gates all connections — handshake failure → error frame + drop, zero RPC surface
+- **11 new BTSP tests**: full round-trip, wrong-seed rejection, error frame, key derivation, framing codec
+- **New deps** (Pure Rust, ecoBin-compliant): `x25519-dalek`, `hmac`, `sha2`, `hkdf`, `rand`, `zeroize`
+
+### Changed
+
+#### Deep Debt Cleanup & Evolution
+- **Production mocks eliminated**: `SongbirdClient::register` (no `live-clients`) now returns `Err` instead of fake success; `ComputeProviderClient` subscribe/query methods return `Err` instead of empty data; `TarpcAdapter::ensure_connected` returns `Err` instead of caching a dummy connection
+- **Hardcoded primal names removed**: Adapter docs now use agnostic `{primal}` templates
+- **Rate limiter evolved**: `Arc<RwLock<HashMap<IpAddr, _>>>` → `DashMap<IpAddr, _>` — `check()`, `client_count()`, `cleanup()` are now sync (no async lock contention)
+- **Handler DRY-up**: 24 manual `RhizoCryptRpcServer { primal: Arc::clone(...), start_time: ... }` constructions → `server.clone()`
+- **Test extraction**: 6 large files refactored via `#[path]` pattern — `client.rs` (692→382), `rate_limit.rs` (549→279), `types.rs` (644→384), `session.rs` (607→436), `error.rs` (673→497), `config.rs` (515→380)
+- **Lint hygiene**: Removed `#![allow(unused_imports)]` from test roots; fixed 4 unused imports; aligned all `#[expect]` attributes with actual lint usage
+- **`TarpcConnection` stub simplified**: Unit struct replaces `{ _stub: () }`; `allow(dead_code)` suppressions removed
+
+**Metrics**
+- 1,456 tests passing (up from 1,441), 146 `.rs` files (up from 136), max file 687 lines (down from 928)
+- musl-static binary: 5.7 MB (static-pie, stripped)
+- Zero clippy warnings, zero unsafe blocks, `cargo deny` clean
+
+## [0.14.0-dev] - 2026-04-08 (session 30)
+
+### Changed
+
+#### Deep Debt Cleanup: Idiomatic Rust & Sovereignty Evolution
+
+- **`IpcErrorPhase`**: Manual `Display` impl → `#[derive(thiserror::Error)]` with `#[error("...")]` attributes
+- **`BtspConfigError`**: New typed error enum replaces `Result<(), String>` for `btsp_env_guard` — proper error variant `FamilyInsecureConflict`
+- **Discovery coupling**: Service code now imports `DiscoveryClient`/`DiscoveryConfig` (capability-neutral type aliases) instead of `SongbirdClient`/`SongbirdConfig`
+- **Doc comment sovereignty**: Removed primal-name references from generic contexts (constants, RPC lib, service docs); provenance comments and anti-pattern examples preserved
+- **`safe_env/mod.rs`** smart refactor: Extracted 427-line test module to `safe_env/tests.rs` (mod.rs: 687 → 260 lines); test strings evolved to capability-neutral IDs
+- **Ecosystem file count**: 136 `.rs` files (was 135)
+
+#### Documentation & Debris Cleanup
+
+- **DEPLOYMENT_CHECKLIST.md**: Updated test count (1,425 → 1,441), file count (135 → 136), session reference (28 → 30)
+- **Showcase docs**: Updated stale test counts across `00_START_HERE.md`, `README.md`; fixed phantom script tree in `01-inter-primal-live/README.md` to match actual files; fixed `GAPS_DISCOVERED.md` references → wateringHole handoffs; fixed `bins/` → `primalBins/` paths; removed foreign `RootPulse` reference; fixed broken `00_START_HERE.md` path in `QUICK_START.sh`
+- **Specs index**: Updated date to April 8, 2026
+- **wateringHole**: Fixed rhizoCrypt description (Encrypted Storage → Ephemeral DAG), grade distribution (A not B), test count in Tier 1, wire standard handoff columns, primalSpring gap matrix L2→L3
+
+## [0.14.0-dev] - 2026-04-08 (session 29)
+
+### Changed
+
+#### BTSP Phase 1: Family-Scoped Socket Naming (GAP-MATRIX-12)
+
+- **`FAMILY_ID` env support**: Reads `RHIZOCRYPT_FAMILY_ID` (primal-specific override) or `FAMILY_ID` (ecosystem-wide); `"default"` treated as unset
+- **Family-scoped socket**: When `FAMILY_ID` is set, UDS path becomes `rhizocrypt-{family_id}.sock` per BTSP socket naming convention
+- **`BIOMEOS_INSECURE` guard**: Refuses to start when both `FAMILY_ID` and `BIOMEOS_INSECURE=1` are set (mutually exclusive production/dev modes)
+- **`is_biomeos_insecure()`**: Truthy check for development mode (`1`, `true`, `yes`)
+- **Service startup**: Logs BTSP family ID and dev-mode warnings; guard check runs before DAG engine initialization
+- **16 new tests**: `read_family_id` (6 tests), `is_biomeos_insecure` (2), `btsp_env_guard` (5), `family_scoped_socket_path` (3)
+
+#### GAP-MATRIX-10: Wire L2 Verified Already Resolved
+
+- `capabilities.list` already returns `{primal, version, methods}` flat array (session 27)
+- `identity.get` already implemented (session 26)
+- Existing tests at `test_capability_list` and `test_identity_get` confirm compliance
+
+**Metrics**
+- 1,441 tests passing (up from 1,425), 0 clippy warnings, 0 fmt issues
+
+## [0.14.0-dev] - 2026-04-08 (session 28)
+
+### Changed
+
+#### reqwest Elimination — ecoBin Full Compliance
+
+- **Banned dependency removed**: Replaced `reqwest` (pulls ring/C deps) with pure Rust `hyper-util` + `http-body-util` client stack across all 5 HTTP client modules
+- **New `EcoHttpClient`**: Lightweight HTTP client wrapper in `clients/adapters/http.rs` built on `hyper_util::client::legacy::Client` — provides `post_json()`, `get()`, `validate_url()` with timeout support
+- **BearDog HTTP client**: Migrated from `reqwest::Client` to `EcoHttpClient` — signing, verification, health endpoints
+- **NestGate HTTP client**: Migrated — blob store/retrieve/exists/metadata/health endpoints; HEAD→GET for `exists()` (hyper HTTP/1.1 client)
+- **ToadStool HTTP client**: Migrated — BYOB deploy/health/deployments/usage endpoints; added internal `get_json()`/`post_empty_json()` helpers
+- **LoamSpine HTTP client**: Migrated — JSON-RPC 2.0 over HTTP with method negotiation preserved
+- **HttpAdapter (generic)**: Migrated — capability-based REST adapter
+- **Error types**: `BearDogHttpError`, `NestGateHttpError`, `ToadStoolHttpError` error variants updated from `reqwest::Error` sources to `String` transport errors
+- **deny.toml**: Added `reqwest` and `ring` to banned crate list (18 total); removed ring tolerance comments
+- **Cargo.toml**: `http-clients` feature now activates `hyper`, `hyper-util`, `http-body-util` instead of `reqwest`
+- **hyper-util**: Added to workspace dependencies (`0.1`, features: tokio, client-legacy, http1)
+
+#### Documentation Refresh
+
+- **README.md**: Updated `.rs` file count (130 → 135), domain count, ecoBin dep note, audit crate count
+- **CONTEXT.md**: Updated method count (27 → 28), file count, ecoBin compliance note, registry line
+- **DEPLOYMENT_CHECKLIST.md**: Updated session reference (26 → 28), file count, last-updated date
+- **crate README**: Updated `http-clients` feature description (reqwest → hyper/tower)
+
+**8. Metrics**
+- 1,425 tests passing, 0 clippy warnings, 0 fmt issues
+- Zero reqwest in dependency tree — fully ecoBin compliant HTTP clients
+- 135 `.rs` files, ~46,200 lines
+
+## [0.14.0-dev] - 2026-04-08 (session 27)
+
+### Changed
+
+#### Capability Wire Standard L3, Deep Debt Cleanup, Smart Refactoring
+
+**1. Capability Wire Standard — Full Level 3 Compliance**
+- Added flat `methods` string array to `capabilities.list` response (L2 requirement — biomeOS skips format detection when present)
+- Added `consumed_capabilities` (10 cross-primal deps) for composition completeness validation
+- Added `cost_estimates` (per-method cpu tier + latency_ms) for AI-assisted routing
+- Added `operation_dependencies` (method DAG) for execution planners
+- Added `protocol` and `transport` array metadata
+- Live-validated against CAPABILITY_WIRE_STANDARD.md v1.0
+
+**2. Manual Error Impls → thiserror (Modern Idiomatic Rust)**
+- Migrated `BearDogHttpError` from manual `Display`+`Error` to `thiserror::Error` derive
+- Migrated `NestGateHttpError` from manual `Display`+`Error` to `thiserror::Error` derive
+- Migrated `RateLimitExceeded` from manual `Display`+`Error` to `thiserror::Error` derive
+- All error types now consistent with `RhizoCryptError` and `RpcError` patterns
+
+**3. Hardcoded Path Elimination**
+- Replaced hardcoded `/tmp/biomeos/rhizocrypt.sock` fallback in UDS module with `temp_dir()/biomeos/rhizocrypt.sock` using ecosystem constants (`BIOMEOS_SOCKET_SUBDIR`, `SOCKET_FILE_EXTENSION`)
+
+**4. Smart Refactoring — `rhizocrypt.rs` (936 → 631 + 325)**
+- Converted `rhizocrypt.rs` to directory module `rhizocrypt/mod.rs`
+- Extracted dehydration pipeline (summary generation, attestation collection, permanent storage commit) to `rhizocrypt/dehydration_ops.rs`
+- Replaced anonymous `(Option<Timestamp>, Option<Timestamp>, u64, AgentRole)` tuple with named `AgentAccumulator` struct
+
+**5. Test Helper Deduplication**
+- Consolidated `create_test_store()` from 5 duplicated copies in redb test files into single definition in `store_redb.rs`
+- Child test modules access via `use super::*`
+
+**6. Dead Code Removal**
+- Removed no-op `Drop` impl on `TestHarness` (cleanup already handled by inner primal's own `Drop`)
+
+**7. Metrics**
+- 1,425 tests passing, 0 clippy warnings, 0 fmt issues
+- Zero unsafe code (all crates `#![forbid(unsafe_code)]`)
+
+## [0.14.0-dev] - 2026-04-07 (session 26)
+
+### Changed
+
+#### Musl-Static Deployment, Dehydrate Alias Fix, Witness Vocabulary, Doc Cleanup
+
+**1. `dag.dehydrate` Alias (BLOCKING FIX)**
+- Added `"dag.dehydrate"` as alias for `"dag.dehydration.trigger"` in JSON-RPC handler dispatch
+- Also added in MCP `tools.call` dispatch for AI agent coordination
+- Springs calling `capability.call("dag", "dehydrate")` via biomeOS prefix matching now reach the correct handler instead of 404
+- New test: `test_dehydrate_alias_routes_to_trigger` verifies identical behavior
+
+**2. Internal Vocabulary: `attested_at` → `witnessed_at`**
+- Renamed `Attestation.attested_at` to `Attestation.witnessed_at` across 6 files
+- Aligns internal naming with evolved `WireWitnessRef` vocabulary (`witnessed_at` on the wire)
+- No downstream break — the wire serialization already mapped to `witnessed_at`
+
+**3. Musl-Static Binary (ecoBin Deployment Compliant)**
+- Built `x86_64-unknown-linux-musl` release binary — fully static, stripped
+- BLAKE3 checksum computed and harvested to `plasmidBin/checksums.toml`
+- `plasmidBin/manifest.toml` updated: `stripped = true`, `static = true`
+- `wateringHole/genomeBin/manifest.toml` updated: `0.14.0-dev`, `pie_verified = true`
+- Resolves Provenance Trio deployment debt (glibc → musl-static)
+
+**4. Dockerfile Multi-Stage Musl Evolution**
+- Builder: `rust:1.87-slim` + `musl-tools` + `x86_64-unknown-linux-musl` target
+- Runtime: `alpine:3.20` with dedicated non-root user (UID 1000)
+- Binary at `/app/rhizocrypt`, healthcheck via `status` subcommand
+- OCI labels, SPDX license identifier
+
+**5. Sovereignty Cleanup**
+- Evolved 14 doc comments from primal-specific names to capability-neutral language across 6 files
+- Removed misleading "LEGACY: Primal-Specific Traits" section from `integration/mod.rs`
+- Evolved test mock IDs from primal names to capability-neutral across 4 test files
+- Extracted `beardog_http.rs` inline tests (330 lines) to `beardog_http_tests.rs` via `#[path]` pattern
+
+**6. GAP-MATRIX-05: Live IPC Validation**
+- Implemented `identity.get` method — returns primal name, version, domain, description, license
+- Changed `capabilities.list` wire format from plain array to biomeOS Format E (`provided_capabilities` wrapper with type + methods flat arrays), preserving detailed `descriptors` array
+- Live-validated on release binary: `identity.get`, `health.liveness`, `health.check`, `health.readiness`, `capabilities.list` all respond correctly on TCP newline (9401) and UDS (`rhizocrypt.sock`)
+- biomeOS can now discover all 28 rhizoCrypt capabilities via Format E parsing
+- New test: `test_identity_get`
+
+**7. Documentation Refresh**
+- Updated `crates/rhizocrypt-service/README.md` Docker example (was `rust:1.85` + `debian:bookworm-slim`)
+- Updated `docs/DEPLOYMENT_CHECKLIST.md`, `docs/ENV_VARS.md`, `showcase/` metrics and dates
+- Updated `wateringHole/ECOSYSTEM_COMPLIANCE_MATRIX.md`: rhizoCrypt musl DEBT → PASS, Tier 10 health/identity/capabilities all PASS, grade D → A
+- Cleaned stale glibc references, test counts, and primal-specific hostnames in wateringHole handoffs
+- Created new wateringHole handoff for session 26
+
+### Quality Gates
+
+- `cargo fmt` — clean
+- `cargo clippy --workspace --all-features` — 0 warnings (maximally pedantic)
+- `cargo test --workspace --all-features` — **1,425 tests passing**, 0 failures
+- `cargo llvm-cov` — **94.34%** lines (CI gate: 90%)
+- Dockerfile builds musl-static binary, Alpine runtime, non-root user
+- All `.rs` files under 1000 lines (max: 928)
+- Zero unsafe, zero production unwrap/expect
+- SPDX headers on all 130 `.rs` files
+
+---
+
+## [0.14.0-dev] - 2026-04-02 (session 25)
+
+### Changed
+
+#### Comprehensive Audit: Dependency Hygiene, Pedantic Clippy, Concurrency, Portability
+
+**1. Workspace Dependency Hygiene**
+- `tower` 0.4 → 0.5 in workspace; `rhizo-crypt-rpc` now uses `tower.workspace = true` (eliminates version split per `WORKSPACE_DEPENDENCY_STANDARD`)
+- Removed direct `hashbrown` dependency — migrated all `hashbrown::{HashMap, HashSet}` to `std::collections` across 8 files; hashbrown 0.14 remains only as transitive dep via `dashmap`
+
+**2. Maximally Pedantic Clippy**
+- Fixed 78 clippy pedantic/nursery lints: 58 `doc_markdown`, 10 `significant_drop_tightening`, 7 `must_use_candidate`, 2 `unnecessary_literal_bound`, 1 bare URL
+- Removed workspace lint allows for `doc_markdown`, `significant_drop_tightening`, `must_use_candidate`, `unnecessary_literal_bound` — these are now **permanently enforced**
+- Zero warnings in both `--all-features` and `--release` builds
+
+**3. Concurrency: Lock Scope Tightening**
+- Refactored 10 `significant_drop_tightening` sites across `tarpc.rs`, `unix_socket.rs`, `songbird/client.rs`, `mocks.rs`, `rhizocrypt.rs`, `store.rs` — lock guards now scoped to minimum lifetime
+- Real concurrency improvement: `RwLock` guards no longer held across `.await` points in IPC client paths
+
+**4. Tarpc Adapter Semantic Fix**
+- `is_healthy()` now returns `false` when `live-clients` feature is disabled (previously returned `true` on stub, misleading monitoring)
+- Dead code warnings eliminated with `#[cfg_attr(not(feature = "live-clients"), allow(dead_code))]`
+
+**5. Portability**
+- Removed hardcoded `/path/to/.cargo-build/` target-dir from `.cargo/config.toml` — developers use `CARGO_TARGET_DIR` env var
+
+### Quality Gates
+
+- `cargo fmt` — clean
+- `cargo clippy --workspace --all-features` — 0 warnings (maximally pedantic, `doc_markdown` enforced)
+- `cargo clippy --release --workspace` — 0 warnings
+- `cargo doc --no-deps` — clean
+- `cargo test --workspace --all-features` — **1,423 tests passing**, 0 failures
+- `cargo llvm-cov` — **94.34%** lines, **93.41%** functions, **94.81%** branches
+- `cargo deny check` — advisories ok, bans ok, licenses ok, sources ok
+- PIE binary verified: 5.4 MB stripped release
+- All `.rs` files under 1000 lines (max: 928)
+- Zero unsafe, zero production unwrap/expect
+- SPDX headers on all 129 `.rs` files
+
+---
+
+## [0.14.0-dev] - 2026-04-01 (session 24)
+
+### Changed
+
+#### Deep Debt: Lock-Free Concurrency, Zero-Sleep Testing, Allocation Elimination
+
+**1. Lock-Free CircuitBreaker**
+- Replaced `tokio::sync::Mutex<Option<Instant>>` with `AtomicU64` (nanos since epoch)
+- `state()`, `allow_request()`, `record_failure()` now fully synchronous — zero async overhead
+- Uses `Ordering::Acquire/Release` for correctness without locks
+
+**2. Zero-Sleep Testing (all non-chaos tests)**
+- `JsonRpcServer` + `UdsJsonRpcServer`: added `serve_with_ready(Arc<Notify>)` — deterministic readiness
+- Binary integration tests: `wait_for_tcp_ready()` + `wait_for_exit()` replace all `sleep` calls
+- Discovery tests: removed 22x serialization lock (`DISCOVERY_MOCK_TCP_LOCK`) — instances already isolated
+- Circuit breaker tests: converted to plain `#[test]` with `Duration::ZERO` — no tokio needed
+
+**3. Hot-Path Allocation Elimination**
+- `HandlerError::InvalidParams` + `MethodNotFound`: `String` → `Cow<'static, str>` (zero alloc for static messages)
+- `list_capabilities`: `OnceLock` cache — computed once, cloned by reference
+
+**4. Dehydration Pipeline Evolution**
+- Payload bytes: queries `InMemoryPayloadStore::total_bytes()` with vertex-count fallback
+- Agent summaries: walks DAG for real `AgentJoin`/`AgentLeave` events (roles, counts, timestamps)
+- Attestation collection: discovers `SigningClient` at runtime, requests real cryptographic attestations
+- Deleted orphan `dehydration_ops.rs`
+
+**5. Test Coverage (+21 tests)**
+- Handler: health aliases, MCP tools.list/tools.call, capability aliases, RPC error propagation
+- Discovery manifest: env resolution, publish/unpublish roundtrip, scan, discover-by-capability
+
+**6. Doc & CI Fixes**
+- Fixed broken `[rhizocrypt_service::ServiceError]` intra-doc link (`cargo doc -D warnings` clean)
+- Archived 6 stale Dec 2025 session docs from root to `archive/dec-27-2025-session-docs/`
+
+### Quality Gates
+
+- `cargo fmt` — clean
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` — 0 warnings
+- `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --all-features --no-deps` — clean
+- `cargo test --workspace --all-features` — **1,423 tests passing**, 0 failures
+- All `.rs` files under 1000 lines
+- Zero unsafe, zero production unwrap/expect
+- Zero sleeps in non-chaos tests
+- SPDX headers on all 129 `.rs` files
+
+---
+
+## [0.14.0-dev] - 2026-03-31 (session 23)
+
+### Added
+
+#### RC-01 Fix: UDS Transport + Dual-Mode TCP + Deep Debt Evolution
+
+**1. Unix Domain Socket (UDS) JSON-RPC Server [CRITICAL — unblocks provenance trio]**
+- New `--unix [PATH]` CLI flag with default `$XDG_RUNTIME_DIR/biomeos/rhizocrypt.sock`
+- `UdsJsonRpcServer` in `jsonrpc/uds.rs` with stale socket cleanup and graceful shutdown
+- Newline-delimited JSON-RPC 2.0 wire format over UDS (same as `socat`, biomeOS pipeline)
+- Gated by `#[cfg(unix)]` for platform safety
+
+**2. Dual-Mode TCP: HTTP POST + Raw Newline Auto-Detection**
+- Single TCP port now auto-detects HTTP POST vs raw newline JSON-RPC per connection
+- First-byte peek: `{`/`[` → newline handler, otherwise → Axum HTTP router via `hyper-util`
+- Generic `handle_newline_connection<S>` works over any `AsyncRead + AsyncWrite` stream
+
+**3. `ecoPrimals` → `biomeos` Socket Path Migration**
+- `safe_env::get_socket_path()` now uses `constants::BIOMEOS_SOCKET_SUBDIR` (`biomeos`)
+- `discovery::manifest::manifest_dir()` now resolves to `$XDG_RUNTIME_DIR/biomeos/`
+- All docs, tests, and adapter examples updated from `ecoPrimals` to `biomeos`
+
+**4. Deep Debt Evolution**
+- `OrExit` trait evolved from `std::process::exit(1)` to `Result` propagation
+- `handle_tcp_connection` return type: `Box<dyn Error>` → `std::io::Result<()>`
+- `SongbirdClient` import moved to function scope; docs use "discovery adapter"
+- `niche.rs`, `vertex.rs`, `types.rs` docs: primal names → capability-agnostic
+- `discovery/registry.rs` comments: "Songbird" → "discovery adapter"
+- `rhizocrypt.rs`: extracted `purge_session_artifacts()` helper (deduplicated cleanup)
+- `integration/mod.rs`: extracted provider traits to `integration/traits.rs` (200+ lines)
+- `deny.toml`: removed resolved RUSTSEC-2024-0384, RUSTSEC-2025-0057
+
+### Quality Gates
+
+- `cargo fmt` — clean
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` — 0 warnings
+- `cargo test --workspace --all-features` — **1,402 tests passing**, 0 failures
+- `cargo deny check` — advisories ok, bans ok, licenses ok, sources ok
+- All `.rs` files under 1000 lines
+- Zero unsafe, zero production unwrap/expect
+- SPDX headers on all 129 `.rs` files
+
+---
+
+## [0.14.0-dev] - 2026-03-24 (session 22)
+
+### Fixed
+
+#### Production Deadlock, Test Hang Root Cause, Concurrency & Readiness Patterns
+
+**1. RwLock Deadlock in `refresh_registration()` [PRODUCTION BUG]**
+- `refresh_registration()` held a read lock on `our_endpoint`, then called `register()` which tried to write-lock the same field — classic RwLock deadlock
+- Fix: clone the endpoint value before releasing the read lock
+- This was the **root cause** of the infinite test hang (835 core tests blocked forever)
+
+**2. Rate Limiter: Testable Time Control**
+- Switched `TokenBucket` / `ClientState` from `std::time::Instant` to `tokio::time::Instant`
+- Test uses `#[tokio::test(start_paused = true)]` + `tokio::time::advance()` — eliminates 1-second real sleep
+- Added `test-util` feature to `rhizo-crypt-rpc` dev-dependencies
+
+**3. RpcServer Readiness Notification**
+- Added `ready_notify: Arc<Notify>`, `wait_ready()`, `ready_notifier()`, `running_flag()` to `RpcServer`
+- Server signals readiness after TCP bind — eliminates all sleep-based readiness polling
+- Service integration tests now await `ready.notified()` instead of `sleep(100ms)`
+
+**4. Songbird Heartbeat Interval Configurable**
+- Added `heartbeat_interval: Duration` to `SongbirdConfig` (default: 45s)
+- Tests use 50ms interval with `start_paused = true` — no real-time waits
+- Heartbeat loop uses `client.config.heartbeat_interval` instead of hardcoded 45s
+
+**5. `run_server` Readiness + Idempotent Tracing Init**
+- Added `run_server_with_ready()` accepting `Option<Arc<Notify>>` for test readiness
+- Changed `tracing_subscriber::fmt().init()` → `.try_init()` (idempotent, no double-init panic)
+- `run_server` standalone/discovery tests now use readiness signal instead of 1-2s sleeps
+
+### Quality Gates
+
+- `cargo fmt` — clean
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` — 0 warnings
+- `cargo doc --no-deps` — clean
+- `cargo test --workspace --all-features` — **1,387 tests passing**, 0 failures, **~30s wall time**
+- `cargo test --workspace` (default features) — **1,216 tests**, ~14s wall time
+- Zero test hangs (previously infinite due to deadlock)
+
+---
+
+## [0.14.0-dev] - 2026-03-24 (session 21)
+
+### Changed
+
+#### Comprehensive Audit & Deep Debt Execution — Clippy, Arc<dyn>, MetadataValue, Store Refactor, Version Alignment
+
+**1. Clippy Clean (CI Gate Fixed)**
+- `PlatformKind::current()` → `const fn` (compile-time platform resolution)
+- Eliminated `clone_on_copy` on Copy type in transport tests
+- Replaced `needless_collect` with iterator `.count()` and `!.any()` in manifest tests
+- All 3 crates now pass `cargo clippy --all-targets --all-features -- -D warnings`
+
+**2. Arc<Box<dyn>> → Arc<dyn> (Eliminate Double Indirection)**
+- Removed unnecessary `Box` heap allocation in 5 capability clients (signing, storage, provenance, compute, permanent)
+- `Arc::new(Box::new(adapter))` → `Arc::from(adapter)` — single indirection, idiomatic Rust
+
+**3. MetadataValue Enum Stack Size Reduction**
+- `Array(Vec<Self>)` → `Array(Box<Vec<Self>>)`, `Object(HashMap<...>)` → `Object(Box<HashMap<...>>)`
+- Reduces enum size disparity between null/bool variants and collection variants
+
+**4. Smart store.rs Refactor (1042 → 659 + 363 lines)**
+- Extracted 363-line test module to `store_tests.rs` using `#[path]` reference
+- Follows existing `store_redb_tests*.rs` pattern
+- Zero files over 1000 lines (max: 867)
+
+**5. Version Alignment (0.13.0-dev → 0.14.0-dev)**
+- Updated Dockerfile OCI label, specs index, capability registry, deploy graph
+- Updated showcase README, START_HERE, service README, manifest doc example
+- 8 files aligned to workspace version
+
+**6. Production panic!() Audit**
+- Verified all 42 `panic!()` calls are in `#[cfg(test)]` modules
+- Zero production panics
+
+**7. Documentation & Cleanup**
+- Updated SPDX file count (125 → 126 `.rs` files) in README.md and CONTEXT.md
+- Root docs refreshed for v0.14.0-dev session 21
+
+### Quality Gates
+
+- `cargo fmt` — clean
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` — 0 warnings
+- `cargo test --workspace --all-features` — **1,387 tests passing**, 0 failures
+- `cargo llvm-cov` — **94.60% line coverage** (CI gate: 90%)
+- `RUSTDOCFLAGS="-D warnings" cargo doc` — 0 warnings
+- All `.rs` files under 1000 lines (max: 867)
+- Zero unsafe, zero production unwrap/expect/panic
+
+---
+
+## [0.14.0-dev] - 2026-03-24 (session 20)
+
+### Changed
+
+#### Deep Debt Execution — Sled Removal, Sovereignty, Coverage, Async Manifest, Arc::clone, Docs
+
+**1. Sled Backend Removal (ecoBin Compliance)**
+- Deleted `store_sled.rs`, `store_sled_tests.rs`, `store_sled_tests_advanced.rs` (entire sled impl)
+- Removed `StorageBackend::Sled` enum variant from `config.rs`
+- Removed `sled` feature from `rhizo-crypt-core/Cargo.toml`
+- Removed `SLED_CACHE_SIZE_BYTES` and `SLED_FLUSH_INTERVAL_MS` constants
+- Updated `store.rs`, `error.rs`, `lib.rs` to remove sled references
+- Storage backends now: `DagBackend::Memory` + `DagBackend::Redb` (both 100% Pure Rust)
+
+**2. Sovereignty — Legacy Vendor Env Vars Removed**
+- Removed `BEARDOG_ADDRESS`, `NESTGATE_ADDRESS`, `LOAMSPINE_ADDRESS` fallback branches from `safe_env/capability.rs`
+- All capability resolution is now purely capability-based (`SIGNING_ENDPOINT`, `PERMANENT_STORAGE_ENDPOINT`, etc.)
+- Primal code only has self-knowledge; discovers other primals at runtime
+- Updated `loamspine_http.rs` doc comments to match
+
+**3. Async Manifest Discovery (`discovery/manifest.rs`)**
+- Converted all manifest functions (`scan_manifests`, `publish_manifest`, `unpublish_manifest`, `discover_by_capability`) from sync to async using `tokio::fs`
+- Refactored tests to use `#[tokio::test]` with `tempfile` directories, eliminating `block_on` nesting and `unsafe { std::env::set_var }` calls
+- Maintains `forbid(unsafe_code)` compliance
+
+**4. Explicit `Arc::clone` in JSON-RPC Handler**
+- Replaced all 24 `server.clone().method().await` patterns with explicit `Arc::clone(&server.primal)` construction
+- Made `primal` and `start_time` fields `pub(crate)` on `RhizoCryptRpcServer`
+
+**5. Test Coverage Push (~94.65% line coverage)**
+- Added ~20 tests to `rhizocrypt_tests.rs` covering error paths, lifecycle edge cases, GC sweep, redb backend
+- Added 8 tests to `store.rs` covering DAG traversal, batch ops, backend dispatch
+- Added 9 tests to `transport.rs` covering all `PlatformKind` branches
+
+**6. Documentation Refresh**
+- Updated README.md, CONTEXT.md, DEPLOYMENT_CHECKLIST.md, ENV_VARS.md metrics (1,387 tests, 125 .rs files)
+- Removed sled from all active specs (STORAGE_BACKENDS, ARCHITECTURE, RHIZOCRYPT_SPECIFICATION, 00_SPECIFICATIONS_INDEX)
+- Removed legacy vendor env var documentation from ENV_VARS.md
+- Updated `rhizo-crypt-core/README.md` (storage backends, modules, feature flags)
+
+### Quality Gates
+
+- `cargo fmt` — clean
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` — 0 warnings
+- `cargo test --workspace --all-features` — **1,387 tests passing**, 0 failures
+- `cargo llvm-cov` — **94.65% line coverage** (CI gate: 90%)
+- All `.rs` files under 1000 lines (max: 867)
+- Zero unsafe, zero production unwrap/expect
+- SPDX headers on all 125 `.rs` files
+
+---
+
+## [0.13.0-dev] - 2026-03-23 (session 19)
+
+### Changed
+
+#### Deep Evolution — MCP Tools, DagBackend, GC Sweeper, Redb Wiring, Proptests
+
+**1. MCP Tool Definitions (`tools.list`, `tools.call`)**
+- `niche.rs` now exposes `mcp_tools()` returning JSON Schema tool definitions for AI agent coordination
+- JSON-RPC handler dispatches `tools.list` → tool catalog, `tools.call` → dynamic method routing
+- Aliases `mcp.tools.list`, `mcp.tools.call` for ecosystem compatibility
+- New `tools` capability domain added to `CAPABILITIES`, `COST_ESTIMATES`, `SEMANTIC_MAPPINGS`, `CAPABILITY_DOMAINS`
+
+**2. `DagBackend` Enum (Runtime Storage Dispatch)**
+- Introduced `DagBackend` enum (`Memory`, `Redb`) for runtime storage backend selection
+- `DagStore` trait uses RPITIT (non-object-safe) — enum dispatch is the idiomatic Rust solution
+- `RhizoCrypt.dag_store` field evolved from `Arc<RwLock<Option<InMemoryDagStore>>>` to `Arc<RwLock<Option<DagBackend>>>`
+- `session_count()`, `total_vertex_count()`, `get_all_vertices()` added as inherent methods
+
+**3. `RedbDagStore` Production Wiring**
+- `RhizoCrypt::start()` now instantiates `DagBackend::Redb` behind `#[cfg(feature = "redb")]`
+- `RedbDagStore::get_all_vertices()` implemented with topological iteration
+- `StorageBackend::Redb` added to config, `Sled` variant explicitly `#[deprecated]`
+
+**4. GC/TTL Background Sweeper**
+- `gc_sweep()` identifies and discards expired sessions based on `max_duration`
+- `spawn_gc_sweeper()` launches as Tokio background task driven by `config.gc_interval`
+- `Timestamp::duration_since()` (const fn) enables age calculations
+
+**5. `normalize_method()` Legacy Prefix Support**
+- Handles `rhizocrypt.` and `rhizo_crypt.` prefixes for backward compatibility
+- Integrated into JSON-RPC handler dispatch pipeline
+
+**6. Health Response Alignment**
+- `health.liveness` → `{"status": "alive"}`, `health.readiness` → `{"status": "ready" | "not_ready"}`
+- Aligned with ecosystem Semantic Method Naming Standard
+
+**7. 4-Format Capability Parsing (New Module)**
+- `clients::capabilities::parsing::parse_capability_response()` handles flat, nested, wrapper, and double-nested JSON formats
+- Sorted, deduplicated output for deterministic comparison
+
+**8. Property-Based Tests for JSON-RPC Handler**
+- 5 proptest suites: capability routing completeness, unknown method rejection, normalize_method idempotency, semantic mapping validity, liveness statelessness
+
+**9. Clippy + Lint Cleanup**
+- Fixed unused feature-gated variable in tarpc adapter tests
+- Fixed redundant clone in toadstool HTTP tests
+- `#[allow]` → `#[expect]` for test lint gates
+- `unwrap_or` → `unwrap_or_else` for lazy evaluation
+- Store sled magic numbers replaced with named constants
+
+**10. Debris Cleanup**
+- Removed `llvm-cov-full-output.txt` (build artifact)
+- Removed `target-ci-check/` (stale CI check target directory)
+
+### Quality Gates
+
+- `cargo fmt` — clean
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` — 0 warnings
+- `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --all-features --no-deps` — 0 warnings
+- `cargo test --workspace --all-features` — **1,412 tests passing**, 0 failures
+- All `.rs` files under 1000 lines (max: 867)
+- Zero unsafe, zero production unwrap/expect, zero TODOs/FIXMEs
+
+---
+
+## [0.13.0-dev] - 2026-03-17 (session 18)
+
+### Changed
+
+#### Deep Debt Execution — Sovereignty, Refactoring, Cross-Compile CI, JSON-RPC Port, Docs Refresh
+
+**1. Primal Sovereignty — `provenance-trio-types` Eliminated**
+- Removed compile-time dependency on shared `provenance-trio-types` crate (cross-primal boundary violation)
+- Created `dehydration_wire.rs` — rhizoCrypt-owned outbound wire types (`DehydrationWireSummary`, `WireAgentRef`, `WireAttestationRef`, `WireOperationRef`)
+- The JSON schema on the wire is the contract, not a shared Rust crate
+- Each primal now owns its own serialization types — zero cross-primal compile-time coupling
+- Resolves primalSpring coordination issue for all trio workspaces
+
+**2. Smart File Refactoring — `validation.rs` Module Extraction**
+- Extracted `ValidationHarness`, `ValidationSink`, `StderrSink`, `StringSink` from `error.rs` (863 → 660 lines) to canonical `validation.rs` (236 lines)
+- New module declared in `lib.rs`, re-exported from both `error` and root for backward compatibility
+
+**3. Smart File Refactoring — `registry_tests.rs` Extraction**
+- Extracted all `#[cfg(test)]` tests from `discovery/registry.rs` (886 → 399 lines) to `registry_tests.rs` (452 lines)
+- Uses `#[path]` attribute for clean separation while preserving module-private access
+
+**4. `RHIZOCRYPT_JSONRPC_PORT` Configuration**
+- Added `JSONRPC_PORT_OFFSET` constant to `constants.rs` (default: tarpc port + 1)
+- Added `SafeEnv::get_jsonrpc_port(tarpc_port)` to `safe_env/mod.rs` with env override
+- `rhizocrypt-service` `run_server` now uses `SafeEnv::get_jsonrpc_port()` instead of hardcoded offset
+
+**5. Cross-Compile CI Job (ecoBin v3.0)**
+- Added `cross-compile` matrix job to `.github/workflows/ci.yml`
+- Targets: `x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`, `riscv64gc-unknown-linux-gnu`
+- Uses `cross` for cross-compilation, validates default-features-only builds
+
+**6. Dependency Evolution Documentation**
+- Documented `ring` → `rustls-rustcrypto`, `sled` → `redb`, tarpc transitive debt in `deny.toml`
+- Documented `sled` deprecation status in `rhizo-crypt-core/Cargo.toml`
+
+**7. Lint Cleanup**
+- Removed unfulfilled `#[expect(clippy::unwrap_used)]` from `songbird/client.rs` test module
+
+**8. `deny.toml` Full ecoBin v3.0 Ban List**
+- Expanded from 7 to 16 banned C-sys crates: added `openssl-src`, `cmake`, `cc`, `bindgen`, `bzip2-sys`, `curl-sys`, `libz-sys`, `pkg-config`, `vcpkg`
+- `cc` allowed as wrapper for `ring` and `blake3` (build-time only, not runtime)
+- Resolved RUSTSEC-2026-0049: updated `rustls-webpki` 0.103.8 → 0.103.10
+- `cargo deny check` — advisories ok, bans ok, licenses ok, sources ok
+
+**9. Smart File Refactoring — 3 More Extractions**
+- `nestgate_http.rs`: 729 → 325 lines (tests → `nestgate_http_tests_wiremock.rs`, 407 lines)
+- `signing.rs`: 758 → 408 lines (tests → `signing_tests.rs`, 353 lines)
+- `niche.rs`: 732 → 514 lines (tests → `niche_tests.rs`, 221 lines)
+- All files now well under 1000-line limit (max: 867)
+
+**10. Ecosystem Documentation Updates**
+- Updated `PRIMAL_REGISTRY.md`: 1330 tests, 92.32% coverage, 14-crate ban list, cross-compile CI, sovereign wire types
+- Updated `genomeBin/manifest.toml`: `pie_verified = true`, UniBin binary description
+- Updated README: 128 SPDX files, 14-crate ecoBin ban list
+- Cleaned stale `showcase/00_START_HERE.md` stats and dead references
+- Wrote wateringHole handoffs for primalSpring resolution and sessions 17–18
+
+### Quality Gates
+
+- `cargo fmt` — clean
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` — 0 warnings
+- `cargo doc --workspace --all-features --no-deps` — 0 warnings (`-D warnings`)
+- `cargo test --workspace --all-features` — **1,330 tests passing**, 0 failures
+- `cargo deny check` — advisories ok, bans ok, licenses ok, sources ok
+- All `.rs` files under 1000 lines (max: 867)
+
+---
+
+## [0.13.0-dev] - 2026-03-17 (session 17)
+
+### Changed
+
+#### Deep Debt Execution — Health Probes, 4-Format Capabilities, ValidationSink, JSON-RPC Fuzz
+
+**1. `health.liveness` + `health.readiness` JSON-RPC Methods** (ecosystem convergence pattern)
+- Added zero-cost liveness probe (`{ "alive": true }`) — Kubernetes/biomeOS compatible
+- Added readiness probe (checks primal health state, returns version + primal ID)
+- Registered in CAPABILITIES, COST_ESTIMATES, SEMANTIC_MAPPINGS, CAPABILITY_DOMAINS
+- Wired into JSON-RPC handler dispatch table
+
+**2. `deny.toml` Yanked Crate Hardening** (absorbed from wateringHole standard)
+- Added `yanked = "deny"` to `[advisories]` — yanked crates now fail CI
+
+**3. 4-Format Capability Parsing** (absorbed from airSpring v0.8.7)
+- Format A: flat string array `["dag.session.create"]`
+- Format B: nested objects `[{"name": "dag.session.create"}]`
+- Format C: wrapper object `{"capabilities": [...]}` (biomeOS/neuralSpring)
+- Format D: double-nested `{"capabilities": [{"name": "..."}]}` (toadStool S155+)
+- Also handles `{"methods": [...]}` wrapper (coralReef variant)
+- Exported as `discovery::extract_capabilities()`
+
+**4. `ValidationSink` Trait** (absorbed from ludoSpring V22)
+- Pluggable output trait for `ValidationHarness` — redirect to JSON, files, buffers
+- `StderrSink` (default), `StringSink` (testing)
+- `finish_to(sink)` method on `ValidationHarness`
+- `checks()` accessor for programmatic inspection
+
+**5. JSON-RPC Proptest Fuzz** (7 new property tests)
+- `prop_jsonrpc_request_roundtrip` — valid method/id parsing
+- `prop_jsonrpc_error_any_code` — error extraction across full code range
+- `prop_jsonrpc_success_no_error` — success responses never extract errors
+- `prop_ipc_phase_mutual_exclusion` — retriable and application error are disjoint
+- `prop_validation_harness_counts` — pass + fail always equals total
+- `prop_validation_sink_captures` — sink output matches harness state
+
+**6. 4-Format Capability Parsing Proptest** (4 new property tests)
+- `prop_capabilities_format_a` — flat strings roundtrip
+- `prop_capabilities_format_b` — nested object extraction
+- `prop_capabilities_format_c` — wrapper object extraction
+- `prop_capabilities_format_d` — double-nested extraction
+
+### Quality Gates
+
+- `cargo fmt` — clean
+- `cargo clippy --workspace --all-targets -- -D warnings` — 0 warnings
+- `cargo doc --workspace --no-deps` — 0 warnings
+- `cargo test --workspace` — **1,102 tests passing**, 0 failures
+- `cargo deny check` — advisories ok, bans ok, licenses ok, sources ok
+
+---
+
+## [0.13.0-dev] - 2026-03-16 (session 16)
+
+### Changed
+
+#### Deep Debt Execution — Ecosystem Absorption, Lint Migration, Manifest Discovery, Chaos Framework
+
+**1. `#[expect(reason)]` Lint Migration** (ecosystem-wide standard)
+- Migrated all crate-level lint attributes to workspace `Cargo.toml` (`[workspace.lints.clippy]`)
+- Removed redundant `#![warn(clippy::all/pedantic/nursery)]` from `lib.rs` (workspace handles these)
+- Added `missing_errors_doc`, `missing_panics_doc`, `field_reassign_with_default`, `unnecessary_literal_bound`, `similar_names` to workspace `"allow"` config
+- Test/bench files use `#[allow]` (blanket policy), production code uses `#[expect(reason)]` (stale suppressions auto-surface)
+
+**2. Generic Socket/Address Env Var Helpers** (absorbed from sweetGrass V0717)
+- `SafeEnv::socket_env_var(primal_name)` → `{PRIMAL}_SOCKET`
+- `SafeEnv::address_env_var(primal_name)` → `{PRIMAL}_ADDRESS`
+- `SafeEnv::get_socket_path(primal_name)` → checks env, falls back to `$XDG_RUNTIME_DIR/ecoPrimals/{name}.sock`
+- Eliminates per-primal constant proliferation
+
+**3. Manifest-Based Discovery** (absorbed from toadStool S156 / barraCuda v0.3.5)
+- New `discovery::manifest` module for `$XDG_RUNTIME_DIR/ecoPrimals/*.json` scanning
+- `PrimalManifest` struct: primal, version, socket, address, capabilities
+- `scan_manifests()`, `discover_by_capability()`, `publish_manifest()`, `unpublish_manifest()`
+- Filesystem-based discovery fallback when Songbird is unavailable
+
+**4. `ValidationHarness`** (absorbed from wetSpring V123 `Validator::finish_with_code()`)
+- Composable validation harness that collects all failures before deciding exit code
+- `check(name, passed)`, `all_passed()`, `pass_count()`, `fail_count()`, `finish()` with summary
+- Suitable for `rhizocrypt doctor` and `rhizocrypt validate` subcommands
+
+**5. Chaos Testing Framework** (absorbed from squirrel ChaosEngine pattern)
+- New `testing::chaos` module with `ChaosEngine`, `ChaosConfig`, `ChaosScenario` trait
+- 7 `FaultClass` variants: `NetworkPartition`, `Latency`, `ProcessCrash`, `ResourceExhaustion`, `ClockSkew`, `ConcurrencyStorm`, `CorruptInput`
+- `ChaosMetrics` with survival rate, error/recovery counts, duration tracking
+- Engine filters scenarios by enabled fault classes, respects max duration budget
+
+### Quality Gates
+
+- `cargo fmt` — clean
+- `cargo clippy --workspace --all-targets -- -D warnings` — 0 warnings
+- `cargo doc --workspace --no-deps` — 0 warnings
+- `cargo test --workspace` — **1,080 tests passing**, 0 failures
+- `cargo deny check` — advisories ok, bans ok, licenses ok, sources ok
+
+---
+
+## [0.13.0-dev] - 2026-03-16 (session 15)
+
+### Changed
+
+#### Deep Debt Execution — Resilience, DispatchOutcome, OrExit, Dual-Format Discovery, Proptest
+
+**1. IpcErrorPhase Convenience Helpers**
+- Added `is_method_not_found()`, `is_timeout_likely()`, `is_retriable()`, `is_application_error()` to `IpcErrorPhase`
+- Enables targeted retry/escalation decisions without manual pattern-matching
+
+**2. DispatchOutcome Enum** (absorbed from airSpring / biomeOS dispatch patterns)
+- New `DispatchOutcome<T>` — separates protocol errors from application results
+- `Ok(T)`, `ApplicationError { code, message }`, `ProtocolError(RhizoCryptError)`
+- `into_result()` folds both error variants for callers that don't need the distinction
+
+**3. extract_rpc_error() Centralized Parser**
+- Extracts `(code, message)` from JSON-RPC error objects — used by every IPC adapter
+- Replaces inline error extraction in `unix_socket.rs` `parse_json_rpc_response()`
+
+**4. OrExit<T> Trait** (absorbed from wetSpring V123)
+- Zero-panic validation binaries — `or_exit(context)` prints structured error + exits
+- Implemented for `Result<T, E: Display>` and `Option<T>`
+
+**5. Dual-Format Capability Parsing** (absorbed from groundSpring / neuralSpring / airSpring / wetSpring)
+- Discovery response now handles flat strings (`["Signing"]`) and nested objects (`[{"name": "Signing", "version": "1.0"}]`)
+- Custom serde `Visitor` implementation for `DiscoveredEndpoint.capabilities`
+- `parse_capability()` now accepts colon-delimited names (`crypto:signing`, `did:verification`, etc.)
+
+**6. CircuitBreaker + RetryPolicy** (absorbed from healthSpring V28 / airSpring V15)
+- New `clients/resilience.rs` module with transport-agnostic resilience primitives
+- `CircuitBreaker`: consecutive-failure threshold → open → cooldown → half-open probe
+- `RetryPolicy`: exponential backoff with configurable max, `should_retry()` gates by `IpcErrorPhase`
+- Only transport-level failures (Connect, Write, Read) are retriable; application errors pass through
+
+**7. Proptest Roundtrip Coverage**
+- New property tests: `capability_list()` JSON roundtrip, `IpcErrorPhase` invariants,
+  `extract_rpc_error()` presence/absence, `DispatchOutcome` value preservation
+
+**8. Clippy Fix: Unused Feature-Gated Imports**
+- `tests_tarpc.rs` imports now `#[cfg(feature = "live-clients")]` to avoid unfulfilled lint expectations
+
+### Quality Gates
+
+| Gate | Status |
+|------|--------|
+| `cargo fmt --check` | Clean |
+| `cargo clippy` (pedantic + nursery + cargo, `-D warnings`) | Clean (0 warnings) |
+| `cargo doc --workspace --no-deps` | Clean (0 warnings) |
+| `cargo test --workspace` | 1056+ pass (default features), 0 fail |
+| `cargo deny check` | advisories ok, bans ok, licenses ok, sources ok |
+| `unsafe_code = "deny"` | Workspace-wide |
+| `unwrap_used`/`expect_used` | `"deny"` workspace-wide |
+| Coverage gate | 92.32% lines (`--fail-under-lines 90` CI enforced) |
+| SPDX headers | All `.rs` files |
+| Max file size | All under 1000 lines |
+| Production unwrap/expect | Zero |
+
+---
+
+## [0.13.0-dev] - 2026-03-16 (session 14)
+
+### Changed
+
+#### Deep Debt Execution — Structured IPC, tarpc 0.37, Capability Domains, NDJSON Streaming
+
+**1. Structured IPC Error Types** (absorbed from healthSpring V28 `SendError` pattern)
+- Added `IpcErrorPhase` enum (7 variants: Connect, Write, Read, InvalidJson, HttpStatus, NoResult, JsonRpcError)
+- Evolved `unix_socket.rs` from opaque `Integration(String)` to structured `Ipc { phase, message }`
+- Each IPC lifecycle phase now emits typed errors for targeted retry and observability
+
+**2. tarpc 0.34 → 0.37**
+- Bumped workspace tarpc dependency; resolved `RUSTSEC-2024-0387` (opentelemetry_api)
+- Updated `deny.toml` to remove resolved advisory ignore
+- opentelemetry, tokio-serde, tarpc-plugins all upgraded
+
+**3. Capability Domain Introspection** (absorbed from ludoSpring V20 `capability_domains.rs`)
+- Added `CapabilityDomain`, `CapabilityMethod` structs with `external: bool` flag to `niche.rs`
+- `capability_list()` now includes `domains`, `locality` (local/external counts), per-method `external` flag
+- All 23 rhizoCrypt methods classified as local (CPU-only infrastructure)
+
+**4. DI Config Reader Pattern** (absorbed from sweetGrass v0.7.15)
+- Added `RpcConfig::from_env_reader(F)` — dependency-injected environment reader
+- Tests can supply mock readers without `temp-env` or `unsafe` env mutation
+
+**5. NDJSON Streaming Support** (absorbed from biomeOS v2.43 Pipeline coordination)
+- New `streaming` module: `StreamItem` enum (Data, Progress, End, Error)
+- `StreamingAppendResult` for streaming `event.append_batch` responses
+- `parse_ndjson_line()` for pipeline consumption
+- biomeOS Pipeline coordination graphs can now wire bounded channels
+
+**6. Constant Provenance Documentation**
+- All key constants in `constants.rs` now include `Derivation:` / `Source:` / `Chosen:` provenance
+- Explains origin, validation context, and rationale for each constant
+
+**7. Debris Cleanup**
+- Fixed `Edition: 2021` → `Edition: 2024` in `rhizocrypt version` output
+- Fixed K8s ConfigMap env vars: `RHIZOCRYPT_HOST` → `RHIZOCRYPT_RPC_HOST`, `RHIZOCRYPT_PORT` → `RHIZOCRYPT_RPC_PORT`
+- Updated README: 1222→1244 tests, 110→118 SPDX files, tarpc 0.37, NDJSON streaming
+
+### Quality Gates
+
+| Gate | Status |
+|------|--------|
+| `cargo fmt --check` | Clean |
+| `cargo clippy` (pedantic + nursery + cargo, all features) | Clean (0 warnings) |
+| `cargo doc --workspace --all-features --no-deps` | Clean |
+| `cargo test --workspace --all-features` | 1244 pass, 0 fail |
+| `cargo deny check` | Clean |
+| `unsafe_code = "deny"` | Workspace-wide |
+| `unwrap_used`/`expect_used` | `"deny"` workspace-wide |
+| Coverage gate | 92.32% lines (`--fail-under-lines 90` CI enforced) |
+| SPDX headers | All 118 `.rs` files |
+| Max file size | All under 1000 lines |
+| Production unwrap/expect | Zero |
+
+---
+
+## [0.13.0-dev] - 2026-03-16 (session 13)
+
+### Added
+
+#### Content Similarity Index Experiment Spec
+
+- New spec: `specs/CONTENT_INDEX_EXPERIMENT.md` — locality-sensitive cross-session discovery
+- Proposes a secondary hash index using LSH for structural vertex similarity
+- Feature-gated behind `content-index` (no impact on default builds)
+- Bridges DAG branching (rhizoCrypt) with linear layering (LoamSpine) concepts
+- Spring participation guide published to `wateringHole/CONTENT_SIMILARITY_EXPERIMENT_GUIDE.md`
+- ISSUE-012 opened in `SPRING_EVOLUTION_ISSUES.md` for cross-primal coordination
+
+### Changed
+
+#### Documentation Refresh
+
+- Updated `specs/00_SPECIFICATIONS_INDEX.md` with experimental spec section
+- Updated `README.md`: test count (1222), coverage (92.32%), SPDX file count (110)
+- Updated `CHANGELOG.md` with session 13
+- Handoff published to `wateringHole/handoffs/`
+
+### Quality Gates
+
+| Gate | Status |
+|------|--------|
+| `cargo fmt --check` | Clean |
+| `cargo clippy` (pedantic + nursery + cargo, all features) | Clean (0 warnings) |
+| `cargo doc --workspace --all-features --no-deps` | Clean |
+| `cargo test --workspace --all-features` | 1222 pass, 0 fail |
+| `cargo deny check` | Clean |
+| `unsafe_code = "deny"` | Workspace-wide |
+| `unwrap_used`/`expect_used` | `"deny"` workspace-wide |
+| Coverage gate | 92.32% lines (`--fail-under-lines 90` CI enforced) |
+| SPDX headers | All 110 `.rs` files |
+| Max file size | All under 1000 lines |
+| Production unwrap/expect | Zero |
+
+---
+
+## [0.13.0-dev] - 2026-03-16 (session 12)
+
+### Changed
+
+#### Comprehensive Audit — Deep Debt, Idiomatic Rust, Zero-Copy
+
+**1. `#[allow]` → `#[expect]` Migration (42 test modules)**
+- Migrated all remaining `#[allow(clippy::unwrap_used, clippy::expect_used)]` to precise `#[expect(...)]` attributes across 42 test files
+- Each module now declares only the lint suppressions it actually triggers — unfulfilled `#[expect]` fails the build
+- Removed suppressions entirely where tests used neither `unwrap()` nor `expect()`
+
+**2. Safe Type Conversions (10 files)**
+- Replaced all `as` casts with `TryFrom`/`TryInto` + saturating fallback (`unwrap_or(MAX)`)
+- `binary_integration.rs`: `child.id() as i32` → `i32::try_from(...).expect("pid fits in i32")`; removed `#![allow(clippy::cast_possible_wrap)]`
+- `service.rs`: `l as usize` → `usize::try_from(l).unwrap_or(usize::MAX)`, `session_count as u64` → `u64::try_from(...)`
+- `store_redb.rs`, `store_sled.rs`, `types.rs`, `dehydration.rs`: all `len() as u64` → `u64::try_from(len).unwrap_or(u64::MAX)`
+- `loamspine_http.rs`: `MethodSupport as u8` → `MethodSupport::to_u8()` typed conversion method
+
+**3. Zero-Copy: `SignResponse.signature`**
+- Evolved `signing.rs` `SignResponse.signature` from `Vec<u8>` to `bytes::Bytes`
+- Eliminates intermediate allocation on signing response deserialization
+
+**4. Smart File Refactoring — `store_redb_tests_advanced.rs`**
+- Extracted stats/metrics test domain into `store_redb_tests_stats.rs` (324 lines)
+- `store_redb_tests_advanced.rs` reduced from 1001 → 681 lines (was 1 line over limit)
+- Both files under 1000-line limit with coherent domain grouping
+
+**5. `rustfmt.toml` Edition Sync**
+- Updated `edition = "2021"` → `edition = "2024"` to match workspace `Cargo.toml`
+
+**6. Build Environment Documentation**
+- Documented `CARGO_TARGET_DIR` workaround in `docs/ENV_VARS.md` for noexec mount conflicts
+
+### Quality Gates
+
+| Gate | Status |
+|------|--------|
+| `cargo fmt --check` | Clean |
+| `cargo clippy` (pedantic + nursery + cargo, all features) | Clean (0 warnings) |
+| `cargo doc --workspace --all-features --no-deps` | Clean |
+| `cargo test --workspace --all-features` | 1188 pass, 0 fail |
+| `cargo deny check` | Clean |
+| `unsafe_code = "deny"` | Workspace-wide (zero unsafe in tests via temp-env) |
+| `unwrap_used`/`expect_used` | `"deny"` workspace-wide |
+| Coverage gate | 91.63% lines (`--fail-under-lines 90` CI enforced) |
+| SPDX headers | All 107 `.rs` files |
+| Max file size | All under 1000 lines |
+| Production unwrap/expect | Zero |
+
+---
+
+## [0.13.0-dev] - 2026-03-16 (session 11)
+
+### Changed
+
+#### Cross-Ecosystem Absorption (8 patterns from springs + primals)
+
+**1. Niche Self-Knowledge Module** (absorbed from squirrel, neuralSpring, groundSpring, airSpring)
+- Created `crates/rhizo-crypt-core/src/niche.rs` — single source of truth for primal identity, capabilities, consumed capabilities, cost estimates, operation dependencies, and semantic mappings
+- `capability.list` now sources all data from `niche.rs` instead of hardcoded inline vectors
+- 11 new niche module tests (consistency, cross-reference, domain validation)
+
+**2. Enhanced `capability.list` Response** (absorbed from loamSpine, sweetGrass)
+- `CapabilityDescriptor` now includes per-method `MethodDescriptor` with `cost` tier (low/medium/high) and `deps` (prerequisite operations)
+- biomeOS Pathway Learner can now optimize graph execution order for rhizoCrypt
+- `build_capability_descriptors()` builds response from `niche.rs` constants
+
+**3. `temp-env` for Test Isolation** (absorbed from squirrel, groundSpring)
+- Replaced all 183 `unsafe { std::env::set_var/remove_var }` blocks across 7 files with `temp_env::with_vars`
+- Eliminated all `#[allow(unsafe_code)]` from test modules — zero `unsafe` in the entire codebase
+- Removed all `ENV_LOCK` / `ENV_TEST_LOCK` static mutexes and manual cleanup helpers
+- Added `temp-env = "0.3"` as workspace dev-dependency
+
+**4. Deploy Graph `fallback = "skip"`** (absorbed from wetSpring)
+- Added `fallback = "skip"` to all 4 optional nodes in `graphs/rhizocrypt_deploy.toml` (beardog, songbird, loamspine, sweetgrass)
+- biomeOS ConditionalDag now gracefully skips unavailable optional dependencies
+
+**5. CI Coverage Threshold** (absorbed from beardog, biomeOS, barraCuda)
+- Added `--fail-under-lines 90` enforcement to CI coverage job in `.github/workflows/ci.yml`
+- Prevents coverage regressions below 90%
+
+**6. Workspace Lint Strictness** (absorbed from ludoSpring, squirrel, provenance-trio-types)
+- Upgraded `unwrap_used` and `expect_used` from `"warn"` to `"deny"` in workspace lints
+- Production code already had zero instances; this prevents regressions
+
+**7. `#[expect(reason = "...")]` Strings** (absorbed from toadstool, loamSpine)
+- Added `reason = "..."` strings to all 4 `#[expect()]` attrs in production code
+- Documents *why* each lint suppression exists for audit trail
+
+**8. wateringHole Documentation Updates**
+- Updated `RHIZOCRYPT_LEVERAGE_GUIDE.md` with niche self-knowledge section, enhanced capability.list format
+- Updated `PRIMAL_REGISTRY.md` with post-absorption status
+
+#### Additional Improvements
+- Added `serde` `rc` feature to workspace deps (fixes pre-existing `Arc<str>` serialization issue)
+
+### Quality Gates
+
+| Gate | Status |
+|------|--------|
+| `cargo fmt --check` | Clean |
+| `cargo clippy` (pedantic + nursery + cargo, all features) | Clean (0 warnings) |
+| `cargo doc --workspace --all-features --no-deps` | Clean |
+| `cargo test --workspace --all-features` | 1188+ pass, 0 fail |
+| `cargo deny check` | Clean |
+| `unsafe_code = "deny"` | Workspace-wide (zero unsafe in tests via temp-env) |
+| `unwrap_used`/`expect_used` | `"deny"` workspace-wide |
+| Coverage gate | `--fail-under-lines 90` CI enforced |
+| SPDX headers | All 110 `.rs` files |
+| Max file size | All under 1000 lines |
+| Production unwrap/expect | Zero |
+
+---
+
+## [0.13.0-dev] - 2026-03-15 (session 10)
+
+### Changed
+
+#### Edition 2024 Migration (absorbed from wetSpring, airSpring, healthSpring)
+- Migrated workspace from Edition 2021 to **Edition 2024** with `rust-version = "1.87"`
+- Updated all three Cargo.toml files (workspace, fuzz, showcase)
+- Wrapped 183 `std::env::set_var`/`remove_var` calls in `unsafe {}` (Edition 2024 requirement)
+- Changed workspace lint from `forbid` to `deny` for `unsafe_code`; `forbid` preserved in non-test builds via `#[cfg_attr(not(test), forbid(unsafe_code))]`
+- Collapsed 10 nested `if`/`if let` chains into Edition 2024 `if let` chains
+- Applied Edition 2024 `rustfmt` import reordering (types before modules)
+
+#### biomeOS Niche Standard Compliance
+- Created `graphs/rhizocrypt_deploy.toml` — 5-node deploy graph (BearDog → Songbird → rhizoCrypt → LoamSpine → sweetGrass) for biomeOS orchestration
+- Created `capability_registry.toml` — 23 JSON-RPC methods across 7 domains (`dag.session`, `dag.event`, `dag.vertex`, `dag.merkle`, `dag.slice`, `dag.dehydration`, `health`, `capability`)
+
+#### `#[expect()]` Lint Migration (absorbed from wetSpring V117)
+- Migrated 5 production `#[allow(clippy::...)]` to `#[expect(clippy::...)]`
+- Caught and removed 1 stale suppression (`missing_const_for_fn` on `RateLimiter::disabled()`)
+
+#### wateringHole Documentation Sync
+- Fixed stale method names in `SPRING_PROVENANCE_TRIO_INTEGRATION_PATTERN.md` (`dag.session.append` → `dag.event.append`, `dag.dehydrate` → `dag.dehydration.trigger`)
+- Updated `RHIZOCRYPT_LEVERAGE_GUIDE.md` with all 23 current semantic method names + `capability.list`
+- Updated `PRIMAL_REGISTRY.md` rhizoCrypt entry (1177 tests, 91.47% coverage, Edition 2024)
+
+### Quality Gates
+
+| Gate | Status |
+|------|--------|
+| `cargo fmt --check` | Clean |
+| `cargo clippy` (pedantic + nursery + cargo, all features) | Clean (0 warnings) |
+| `cargo doc --workspace --all-features --no-deps` | Clean |
+| `cargo test --workspace --all-features` | 1177 pass, 0 fail |
+| `cargo deny check` | Clean |
+| `unsafe_code = "deny"` | Workspace-wide (`forbid` in non-test builds) |
+| SPDX headers | All 106 `.rs` files |
+| Max file size | All under 1000 lines |
+| Production unwrap/expect | Zero |
+
+---
+
+## [0.13.0-dev] - 2026-03-15 (session 9)
+
+### Changed
+
+#### Semantic JSON-RPC Method Naming
+- `dag.dehydrate` → `dag.dehydration.trigger` (Spring-as-Niche compliant)
+- `system.health` → `health.check` (Spring-as-Niche compliant)
+- `system.metrics` → `health.metrics` (Spring-as-Niche compliant)
+- Added `capability.list` JSON-RPC endpoint for runtime discovery
+- Updated all handler tests, integration tests, and showcase scripts
+
+#### Coverage Expansion (91.47% line coverage)
+- Added 270 tests across the workspace (907 → 1177)
+- `store_redb.rs` coverage: 68% → 90%+ (25 new tests)
+- `store_sled.rs` coverage: 79% → 90%+ (25 new tests)
+- `songbird/client.rs` coverage: 75% → 90%+ (16 new tests)
+- `doctor.rs` coverage: 81% → 90%+ (16 new tests)
+- `rhizocrypt-service/lib.rs` coverage: 81% → 90%+ (18 new tests)
+
+#### Zero-Copy Evolution
+- `vertex.rs::to_canonical_bytes()` returns `bytes::Bytes` instead of `Vec<u8>`
+- Updated signing and store backends to consume `Bytes` directly
+
+#### CI Pipeline Hardening
+- Added `cargo-deny` job for license, advisory, and ban enforcement
+- Added `--all-features` to coverage and doc CI jobs
+
+#### Dependency Audit
+- Resolved AGPL-3.0-only license for `provenance-trio-types` in `deny.toml`
+- Cleaned `ring` skip from deny config
+- All `cargo deny check` gates green
+
+#### Test Isolation Fix
+- Fixed env var race condition in `resolve_bind_addr_*` tests — `clear_bind_addr_env()` helper
+- Ensures all bind-address tests sanitize global env state before and after
+
+#### Documentation Updates
+- Updated `DEPLOYMENT_CHECKLIST.md` method names: `system.health` → `health.check`, `system.metrics` → `health.metrics`
+- Updated README test count to 1177, coverage to 91.47%, SPDX count to 106
+- Updated CHANGELOG through session 9
+
+### Quality Gates
+
+| Gate | Status |
+|------|--------|
+| `cargo fmt --check` | Clean |
+| `cargo clippy` (pedantic + nursery + cargo, all features) | Clean (0 warnings) |
+| `cargo doc --workspace --all-features --no-deps -D warnings` | Clean |
+| `cargo test --workspace --all-features` | 1177 pass, 0 fail |
+| `cargo deny check` | Clean |
+| `#![forbid(unsafe_code)]` | Workspace-wide |
+| SPDX headers | All 106 `.rs` files |
+| Max file size | All under 1000 lines |
+| Production unwrap/expect | Zero |
+
+---
+
+## [0.13.0-dev] - 2026-03-15 (session 8)
+
+### Changed
+
+#### O(1) Vertex-to-Session Index
+- Added `vertex_session_index: Arc<DashMap<VertexId, SessionId>>` to `RhizoCrypt`
+- Populated on `append_vertex`, cleaned on `discard_session` and `stop`
+- Exposed `session_for_vertex()` for O(1) lookup
+- `verify_proof` RPC now uses the index directly — eliminated O(N) session scan
+
+#### CheckoutSlice Evolution
+- Replaced placeholder `spine_index: u64` with real LoamSpine parameters: `spine_id`, `entry_hash` (hex), `entry_index`, `session_id`, `checkout_vertex`, `owner`, `holder`, `certificate_id`
+- Eliminated all three placeholder values (`[0u8; 32]`, `SessionId::now()`, `VertexId::ZERO`)
+- Added hex decode with proper error handling via `RpcError::InvalidRequest`
+- Updated JSON-RPC handler, tarpc client, handler tests, and integration tests
+
+#### Zero-Copy DID (`Did` → `Arc<str>`)
+- Evolved `Did(pub String)` to `Did(Arc<str>)` with `#[serde(transparent)]`
+- `Did::default()` uses `LazyLock` static — allocated once, cloned O(1)
+- All DID cloning across sessions, slices, dehydration, and RPC is now a trivial pointer increment
+
+#### Additional Improvements
+- Fixed broken intra-doc link in `signing.rs` (`[sign]` → `[Self::sign]`)
+- Removed unnecessary intermediate `result` variable in JSON-RPC handler
+- Replaced hardcoded `"no songbird"` test assertion with capability-based language
+- Extracted `DEFAULT_KEY_TYPE` and `DEFAULT_CONTENT_TYPE` constants in HTTP clients
+- Evolved `beardog_http::sign()` and `nestgate_http::retrieve()` to return `bytes::Bytes`
+- Used central `constants::LOCALHOST` instead of hardcoded `"127.0.0.1"` in config
+- Eliminated redundant `clone()` and double `id()` call in `append_vertex`
+
+#### Documentation & Cleanup
+- Updated README test count to 907+
+- Updated CHANGELOG with session 8 entry
+- Moved cross-project audit doc to wateringHole fossil record
+- Created new wateringHole handoff
+
+### Quality Gates
+
+| Gate | Status |
+|------|--------|
+| `cargo fmt --check` | Clean |
+| `cargo clippy` (pedantic + nursery + cargo, all features) | Clean (0 warnings) |
+| `cargo doc --workspace --all-features --no-deps -D warnings` | Clean |
+| `cargo test --workspace` | 907 pass, 0 fail |
+| `#![forbid(unsafe_code)]` | Workspace-wide |
+| SPDX headers | All 105 `.rs` files |
+| Max file size | All under 1000 lines |
+| Production unwrap/expect | Zero |
+
+---
+
+## [0.13.0-dev] - 2026-03-15 (session 7)
+
+### Changed
+
+#### scyBorg License Alignment
+- Updated SPDX identifier from `AGPL-3.0-only` to `AGPL-3.0-or-later` across all 105 `.rs` files, `Cargo.toml`, `deny.toml`, `Dockerfile`, CI workflow, and all documentation
+- Aligned with wateringHole/scyBorg licensing standard (AGPL-3.0 + ORC + CC-BY-SA)
+
+#### Smart Refactoring — `store_redb.rs`
+- Extracted `read_vertex_set` and `write_vertex_set` helpers — eliminated `#[allow(clippy::too_many_lines)]` on `put_vertex`
+- `Debug` impl uses `finish_non_exhaustive()` — removed `#[allow(clippy::missing_fields_in_debug)]`
+
+#### Zero-Copy Signing
+- Added `sign_owned(Bytes)` / `verify_owned(Bytes)` paths to signing capability client
+- `sign_vertex` / `verify_vertex` use `Bytes::from(Vec<u8>)` (ownership transfer) instead of `Bytes::copy_from_slice`
+
+#### Metrics Hardening
+- Fixed duplicate padding entries in `ALL_METHODS` array — defined `RPC_METHOD_COUNT` / `ERROR_TYPE_COUNT` constants
+- Safe `f64` → `u64` cast: explicit `is_finite()` + positivity check before truncation
+
+#### Modern Async Traits (RPITIT)
+- Converted `PermanentStorageProvider` impl in `loamspine_http.rs` from `fn -> impl Future { async move }` to `async fn`
+- Removed `#[allow(clippy::manual_async_fn)]` and eliminated pre-async-block cloning
+
+#### Idiomatic Patterns
+- `safe_env/capability.rs`: `Option::inspect()` replacing `.map(|x| { side_effect; x })` — removed `#[allow(clippy::manual_inspect)]`
+- `store_sled.rs`: `SledExportEntry` type alias replacing `#[allow(clippy::type_complexity)]`; `finish_non_exhaustive()` for Debug
+- `doctor.rs`: Added `#[must_use]` and `# Errors` doc section per pedantic clippy
+
+#### Documentation Cleanup
+- Rewrote `docs/DEPLOYMENT_CHECKLIST.md` (port 9400, 882+ tests, redb/sled storage, JSON-RPC health checks)
+- Fixed `docs/ENV_VARS.md` (`RHIZOCRYPT_DISCOVERY_ADAPTER` as primary, `RHIZOCRYPT_PORT` matching code)
+- Updated `README.md` metrics, fixed broken spec links, cleaned showcase port references
+- Archived legacy `INTEGRATION_SPECIFICATION.md` to `specs/archive/`
+- New wateringHole handoff documenting this session
+
+### Quality Gates
+
+| Gate | Status |
+|------|--------|
+| `cargo fmt --check` | Clean |
+| `cargo clippy` (pedantic + nursery + cargo, all features) | Clean (0 warnings) |
+| `cargo doc --workspace --all-features --no-deps` | Clean |
+| `cargo test --workspace` | 907 pass, 0 fail |
+| `cargo llvm-cov` | 90.88% line coverage |
+| `#![forbid(unsafe_code)]` | Workspace-wide (all entry points) |
+| SPDX headers | All 105 `.rs` files |
+| Max file size | All under 1000 lines |
+
+---
+
+## [0.13.0-dev] - 2026-03-15 (session 6)
+
+### Changed
+
+#### Deep Debt Reduction & Modern Idiomatic Rust
+- Evolved `ProtocolAdapter` trait: `call_json(&str, String)` → `call_json(&str, &str)` — borrows where possible, allocates only at transport boundary
+- Replaced all `Box<dyn Error>` with typed `ServiceError::Storage` variant in doctor checks
+- Extracted `serialize_response()` helper in JSON-RPC mod — logs serialization errors via `tracing::warn!` instead of silently falling back with `unwrap_or_default()`
+- Eliminated redundant `.clone()` on last-use values flagged by clippy `redundant_clone`
+- Fixed `default_value` in clap `Client` subcommand: now references `constants::LOCALHOST` and `constants::PRODUCTION_RPC_PORT` instead of hardcoded `"127.0.0.1:9400"`
+
+#### Constants Centralization (continued)
+- Added `DEFAULT_GC_INTERVAL`, `RATE_LIMIT_CLEANUP_INTERVAL`, `RATE_LIMIT_CLEANUP_INTERVAL_DEV` to `constants.rs`
+- Dehydration config now uses `constants::DEFAULT_ATTESTATION_TIMEOUT_SECS` and named `FULL_ATTESTATION_TIMEOUT_SECS`
+- Rate limiter cleanup intervals reference constants instead of inline `Duration::from_secs(60/300)`
+
+#### Sovereignty Hardening
+- Removed cloud provider references ("AWS KMS, GCP KMS, Azure Key Vault", "S3, Azure") from capability trait doc comments
+- All capability docs now use agnostic language ("discovered at runtime via capabilities")
+
+#### Smart File Refactoring
+- Extracted `doctor.rs` (197 lines) from `rhizocrypt-service/src/lib.rs` — contains `DoctorCheck`, `run_doctor`, all health check functions
+- `lib.rs` reduced from 809 → 624 lines
+
+#### Provenance Trio Wire Types
+- Added provenance wire types for notification format (later inlined in session 18)
+- `ProvenanceNotifier` converts internal `DehydrationSummary` to wire format
+
+### Quality Gates
+
+| Gate | Status |
+|------|--------|
+| `cargo fmt --check` | Clean |
+| `cargo clippy` (pedantic + nursery + cargo, all features) | Clean (0 warnings) |
+| `cargo doc --workspace --all-features --no-deps` | Clean |
+| `cargo test --workspace` | 907 pass, 0 fail (default features) |
+| `#![forbid(unsafe_code)]` | Workspace-wide (all 4 entry points) |
+| SPDX headers | All 104 `.rs` files |
+| Max file size | All under 1000 lines (max 858) |
+| No production `todo!()`, `unimplemented!()`, `TODO`, `FIXME` | Verified |
+
+---
+
+## [0.13.0-dev] - 2026-03-14 (session 5)
+
+### Changed
+
+#### Pedantic Clippy Clean (0 warnings with pedantic + nursery)
+- Fixed 45+ clippy errors: `significant_drop_tightening`, `doc_markdown`, `must_use_candidate`, `missing_errors_doc`
+- All public Result-returning functions now have `# Errors` doc sections
+- All identifiers in doc comments wrapped in backticks
+- Lock scopes tightened across RPC and test harness code
+
+#### Magic Numbers Centralized
+- Added 7 new constants to `constants.rs`: `SLED_CACHE_SIZE_BYTES`, `SLED_FLUSH_INTERVAL_MS`, `DISCOVERY_QUERY_TIMEOUT`, `DISCOVERY_RESPONSE_BUFFER_SIZE`, `PROVENANCE_CONNECTION_TIMEOUT`, `PROVENANCE_RESPONSE_TIMEOUT`, `PROVENANCE_DEFAULT_MAX_RESULTS`
+- Updated `store_sled.rs`, `discovery/registry.rs`, `adapters/tarpc.rs`, `toadstool_http.rs`, provenance clients
+
+#### Smart File Refactoring
+- `store_sled.rs`: 949 → 552 lines (tests extracted to `store_sled_tests.rs`)
+- `store_redb_tests_advanced.rs`: 994 → 846 lines (query tests to `store_redb_tests_query.rs`)
+- All files now well under 1000-line limit (max: 858)
+
+#### UniBin Exit Codes & Signal Handling
+- Added `exit_codes` module: `SUCCESS` (0), `GENERAL_ERROR` (1), `CONFIG_ERROR` (2), `NETWORK_ERROR` (3), `INTERRUPTED` (130)
+- `ServiceError::exit_code()` maps errors to proper exit codes
+- Added `shutdown_signal()`: SIGTERM + SIGINT on Unix, Ctrl+C on other platforms
+- Server graceful shutdown via `tokio::select!` with `tokio::pin!`
+
+#### ecoBin Compliance Hardened
+- Default build confirmed pure Rust (no `ring`); `ring` only via opt-in `http-clients`
+- `deny.toml`: explicit bans for `openssl-sys`, `native-tls`, `aws-lc-sys` and 4 other C-backed crates
+- `ring` documented as tolerated opt-in only, pending `rustls-rustcrypto` stabilization
+
+#### Test Expansion
+- **1092 tests passing** (was 1075) — +17 new tests
+- **90.83% line coverage** (was 91.02% — slight shift from refactoring)
+- New E2E: `slice_workflows.rs` (5 tests), `merkle_operations.rs` (4 tests)
+- New chaos: `resource_exhaustion.rs` (4 tests)
+- New service: exit codes + signal handling (4 tests)
+
+### Quality Gates
+
+| Gate | Status |
+|------|--------|
+| `cargo fmt --check` | Clean |
+| `cargo clippy` (pedantic + nursery) | Clean (0 warnings) |
+| `cargo doc --workspace --all-features --no-deps` | Clean (0 warnings) |
+| `cargo test --workspace --all-features` | 1092 pass, 0 fail |
+| `cargo test --doc --workspace --all-features` | 30 pass, 0 ignored |
+| `cargo llvm-cov --all-features` | 90.83% lines, 92.31% regions |
+| `cargo deny check` | advisories ok, bans ok, licenses ok, sources ok |
+| `#![forbid(unsafe_code)]` | Workspace-wide |
+| SPDX headers | All `.rs` files |
+| Max file size | All under 1000 lines (max 858) |
+| No production TODOs/FIXMEs | Verified |
+
+---
+
+## [0.13.0-dev] - 2026-03-14 (session 4)
+
+### Changed
+
+#### Sovereignty: Capability-Based Error Types
+- Removed primal-specific error variants `BearDog(String)`, `LoamSpine(String)`, `NestGate(String)`
+- Added `CapabilityProvider { capability, message }` — structured, capability-based variant
+- Removed deprecated trait aliases `BearDogClient`, `LoamSpineClient`, `NestGateClient`
+- Updated `is_recoverable()` to cover `Integration` and `CapabilityProvider`
+
+#### JSON-RPC Zero-Copy: from_str → from_slice
+- Replaced two-step `from_utf8` + `from_str` with single `serde_json::from_slice(&body)`
+- Combines UTF-8 validation and JSON parsing in one pass, eliminating intermediate `&str`
+
+#### Doc Tests Rewritten (26 ignore → no_run)
+- All 26 `ignore`d doc tests rewritten to match current API surface
+- **30 doc tests passing, 0 ignored** (was 4 passing, 26 ignored)
+- Doc examples now serve as compilable API reference
+
+#### Coverage & Test Expansion
+- **1075 tests passing** (was 1022) — +53 new tests
+- **91.02% line coverage** (was 90.12%), 87.61% function, 92.38% region
+- `store_redb_tests_advanced.rs`: `parse_vertex_set` edge cases, `Clone` independence, `StorageStats` debug
+- `error.rs`: `CapabilityProvider` construction, display, recoverability
+- `songbird_rpc.rs`: function coverage 52% → 96%
+
+#### Root Docs & crate README Modernized
+- Root `README.md`: metrics updated (1075 tests, 91.02% coverage), `client` subcommand added
+- `rhizo-crypt-core/README.md`: rewritten — removed RocksDB/BearDog references, updated to redb/sled, capability-based clients
+- New wateringHole handoff for session 4
+
+### Quality Gates
+
+| Gate | Status |
+|------|--------|
+| `cargo fmt --check` | Clean |
+| `cargo clippy --workspace --all-features --all-targets -- -D warnings` | Clean |
+| `cargo doc --workspace --all-features --no-deps` | Clean (0 warnings) |
+| `cargo test --workspace --all-features` | 1075 pass, 0 fail |
+| `cargo test --doc --workspace --all-features` | 30 pass, 0 ignored |
+| `cargo llvm-cov --all-features` | 91.02% lines, 92.38% regions |
+| `cargo deny check` | advisories ok, bans ok, licenses ok, sources ok |
+| `#![forbid(unsafe_code)]` | Workspace-wide |
+| SPDX headers | All `.rs` files |
+| Max file size | All under 1000 lines |
+
+---
+
+## [0.13.0-dev] - 2026-03-14 (session 3)
+
+### Changed
+
+#### Deep Debt Execution & Coverage Push to 90%
+- **1022 tests passing** (was 862) — +160 new tests across all modules
+- **90.12% line coverage** (llvm-cov) — crossed 90% target
+- **Zero production TODOs, FIXMEs, or HACKs** in all `.rs` files
+- **Zero production `unwrap()`/`expect()`** — all in `#[cfg(test)]` modules with proper `#[allow]`
+
+#### Platform-Agnostic Transport (ecoBin v2.0)
+- `TransportHint` enum: `UnixSocket`, `Tcp`, `AbstractSocket`
+- `socket_dir()`: XDG_RUNTIME_DIR → /run/ecoPrimals → /tmp/ecoPrimals; `None` on Android/Windows
+- `socket_path_for_primal()`: per-primal socket path construction
+- `preferred_transport()`: runtime OS detection, picks optimal transport
+
+#### UniBin Doctor Subcommand
+- `rhizocrypt doctor` — DAG engine, storage (redb), configuration, discovery, environment checks
+- `rhizocrypt doctor --comprehensive` — adds TCP connectivity probes to discovery endpoints
+- Human-readable output with pass/warn/fail indicators
+
+#### Zero-Copy JSON-RPC Handler
+- `get_str()` → returns `&str` instead of `String` (zero allocation on parameter extraction)
+- `get_opt_str()` → returns `Option<&str>` instead of `Option<String>`
+- Explicit `.map(String::from)` only where struct fields require ownership
+
+#### HTTP Client Test Infrastructure
+- Added `wiremock` (pure Rust) for HTTP client testing
+- LoamSpine: 16 wiremock tests (method negotiation, health, commit, verify, checkout, resolve)
+- BearDog: 8 wiremock tests (sign, verify, health, error paths)
+- NestGate: 12 wiremock tests (store, retrieve, exists, metadata, health)
+- ToadStool: 15 wiremock tests (health, BYOB health, deployments, stop, usage)
+- Songbird: 4 tarpc integration tests with mock server
+- Provenance: 6 mock adapter tests (all capability methods)
+
+#### Spec & Doc Alignment
+- `STORAGE_BACKENDS.md` updated: RocksDB/LMDB → redb/sled (ecoBin rationale)
+- Binary integration tests: `env!("CARGO_BIN_EXE_rhizocrypt")` — idiomatic Rust binary discovery
+- Root docs and CHANGELOG updated to current metrics
+
+### Quality Gates
+
+| Gate | Status |
+|------|--------|
+| `cargo fmt --check` | Clean |
+| `cargo clippy --workspace --all-features --all-targets -- -D warnings` | Clean |
+| `cargo doc --workspace --all-features --no-deps` | Clean (0 warnings) |
+| `cargo test --workspace --all-features` | 1022 pass, 0 fail |
+| `cargo llvm-cov --all-features` | 90.12% lines, 91.84% regions |
+| `cargo deny check` | advisories ok, bans ok, licenses ok, sources ok |
+| `#![forbid(unsafe_code)]` | Workspace-wide |
+| SPDX headers | All `.rs` files |
+| Max file size | All under 1000 lines |
+
+---
+
+## [0.13.0-dev] - 2026-03-13 (session 2)
+
+### Changed
+
+#### Deep Debt Resolution & Modern Idiomatic Rust
+- **862 tests passing** (was 600) — +262 new tests across all modules
+- **87.78% line coverage** (llvm-cov) — remaining gap is DB error paths and binary entry point
+- **Zero production TODOs, FIXMEs, or HACKs** in all `.rs` files
+- **All files under 1000 lines** — extracted test modules from handler.rs and loamspine_http.rs
+
+#### Service Library Extraction
+- Extracted `rhizocrypt-service` logic into `lib.rs` for testability
+- `run_server`, `resolve_bind_addr`, `register_with_discovery` now testable without subprocess
+- `main.rs` is a thin CLI wrapper delegating to the library
+
+#### Dependency Audit Infrastructure
+- **`cargo-deny`** configured (`deny.toml`) — advisories, licenses, bans, sources enforced
+- CDLA-Permissive-2.0 allowed (transitive via webpki-roots)
+- Transitive unmaintained advisories from tarpc acknowledged and tracked
+- Workspace wildcard dependencies permitted for internal crates
+
+#### Coverage Push (600 → 862 tests)
+- `store_sled.rs`: +20 tests (exists, export, batch, concurrent, frontier, genesis)
+- `discovery/registry.rs`: +6 tests (capability parsing, unhealthy filtering, connection refused)
+- `clients/loamspine_http.rs`: +15 tests (JSON-RPC response handling, serde, negotiation)
+- `clients/toadstool_http.rs`: +12 tests (deployment parsing, event conversion, serde)
+- `clients/nestgate_http.rs`: +10 tests (blob storage serde, error display, source chain)
+- `clients/beardog_http.rs`: +10 tests (signing serde, DID document, error chain)
+- `jsonrpc/mod.rs`: +7 tests (invalid UTF-8, empty batch, wrong version, missing ID)
+- `rhizocrypt-service/lib.rs`: +6 tests (bind addr, error display, discovery registration)
+
+#### Mock Isolation Verified
+- All mock types gated behind `#[cfg(any(test, feature = "test-utils"))]`
+- Zero mock code in production paths
+- `test-utils` feature only used by fuzz targets
+
+#### ecoBin Compliance Verified
+- Zero application C dependencies in default build
+- `blake3` uses `pure` feature (no C/assembly compilation)
+- TLS via `rustls` (pure Rust) when `http-clients` feature enabled
+- No project `build.rs` invoking C compilers
+
+### Quality Gates
+
+| Gate | Status |
+|------|--------|
+| `cargo fmt --check` | Clean |
+| `cargo clippy --workspace --all-features --all-targets -- -D warnings` | Clean |
+| `cargo doc --workspace --all-features --no-deps` | Clean |
+| `cargo test --workspace --all-features` | 862 pass, 0 fail |
+| `cargo deny check` | advisories ok, bans ok, licenses ok, sources ok |
+| `#![forbid(unsafe_code)]` | Workspace-wide |
+| SPDX headers | All `.rs` files |
+| Max file size | All under 1000 lines |
+
+---
+
+## [0.13.0-dev] - 2026-03-13
+
+### Changed
+
+#### Pure Rust Storage Evolution
+- **redb default**: Switched default storage backend from `sled` to `redb` (100% Pure Rust)
+- **ecoBin compliant**: Default build now has zero C dependencies
+- **Feature-gated**: `sled` backend remains available via `--features sled`
+
+#### Test Coverage: 80.6% → 90.02%
+- 600 tests passing (was 491) — +114 new unit tests across 14 modules
+- `rpc/client.rs`: 0% → 81% (22 new tests)
+- `rhizocrypt.rs`: 80% → 92% (14 new tests including full lifecycle, dehydration)
+- `store_redb.rs`: 62% → 79% (14 new tests including diamond DAG, persistence)
+- `event.rs`: 68% → 100% (serialization roundtrips for all variants)
+- `rpc/jsonrpc/mod.rs`: 20% → 77% (5 Axum endpoint integration tests)
+
+#### Client Method Negotiation
+- LoamSpine HTTP client now tries native method names (`commit.session`) first
+- Falls back to compatibility names (`permanent-storage.commitSession`) on -32601
+- Negotiation outcome cached via `AtomicU8` for zero-overhead subsequent calls
+
+#### Discovery Registry Evolution
+- `DiscoveryRegistry::discover()` now queries Songbird via HTTP/1.1 over TCP
+- Parses `discovery.resolve` JSON-RPC responses and caches results
+- New `parse_capability()` helper converts string names to `Capability` variants
+
+#### JSON-RPC Handler Coverage
+- 12 new handler unit tests covering all session, event, vertex, Merkle, slice, and system methods
+
+---
+
+## [0.13.0-dev] - 2026-03-12
+
+### Changed
+
+#### wateringHole Standards Compliance
+- **AGPL-3.0-or-later**: Updated SPDX identifier, added headers to all 71 source files
+- **UniBin architecture**: Binary renamed to `rhizocrypt` with `clap` subcommands (`server`, `status`, `version`)
+- **Semantic method naming**: JSON-RPC methods evolved from `loamspine.*` to `permanent-storage.*`
+- **ecoBin**: `reqwest` switched to `rustls-tls` (no OpenSSL); sled `zstd-sys` dependency documented
+
+#### Capability-Based Discovery
+- Removed all hardcoded development fallback ports and addresses
+- Removed deprecated primal-specific discovery methods (`discover_beardog`, etc.)
+- Removed deprecated vendor env vars (`TOADSTOOL_ADDRESS`, `SWEETGRASS_PUSH_ADDRESS`)
+- All discovery is now capability-only at runtime
+
+#### Code Quality
+- Converted `create_session`, `checkout_slice`, `resolve_slice`, `get_dehydration_status` from `async` to sync
+- Converted `Vertex` methods to return `Result` (removed `expect()` from production code)
+- Fixed `cast_possible_truncation` with safe `u64::try_from` + saturating arithmetic
+- Optimized atomic ordering from `SeqCst` to `Relaxed` for request counters
+- Removed bulk `#[allow(clippy::*)]` suppressions, fixed all exposed violations
+- Deleted `legacy_aliases.rs` and deprecated mock type aliases
+- Reduced `discovery.rs` from 1001 to 854 lines (smart refactoring, not splitting)
+
+#### Infrastructure
+- Added 3 fuzz testing targets (`cargo-fuzz` + `libfuzzer-sys`)
+- Fixed test hang in `test_service_handles_invalid_port`
+- Updated Dockerfile and k8s deployment for UniBin binary
+- Updated CI workflow with doc checks and `actions/cache@v4`
+- Cleaned 22 root-level session artifacts to `phase2/archive/`
+- Completed dehydration implementation (payload sizes, event counting, role assignment)
+
+### Metrics (March 12)
+- 491 tests passing (0 failed)
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`: clean
+- `cargo fmt --check --all`: clean
+- `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps`: clean
+- All files under 1000 lines (max: 981)
+
+---
+
+## [0.14.1-dev] - 2026-01-09 (archived)
+
+### Changed
+- lib.rs restructured (1104 → 254 lines), extracted `metrics.rs` and `rhizocrypt.rs`
+- Completed LoamSpine HTTP client (4 production TODOs eliminated)
+- Clippy warnings reduced from 20+ to 0
+- 374 tests, 79.35% coverage
+
+---
+
+## [0.13.0-dev] - 2025-12-26
+
+### Changed
+- Capability-based type system (`SigningProvider`, `PermanentStorageProvider`, `PayloadStorageProvider`)
+- Deprecated primal-specific trait names (backward compatible via aliases)
+- Integration Specification v2.0 (`specs/INTEGRATION_SPECIFICATION_V2.md`)
+- 486 tests, 86.17% coverage
+
+---
+
+## [0.12.0] - 2025-12-26
+
+### Changed
+- Lock-free concurrency: `Arc<RwLock<HashMap>>` → `Arc<DashMap>` (10-100x improvement)
+- Songbird auto-registration with heartbeat
+- 403 tests, 85%+ coverage
+
+---
+
+## [0.10.0] - 2025-12-24
+
+### Changed
+- Pure infant discovery architecture (SafeEnv, CapabilityEnv)
+- Capability-based environment variables (e.g. `SIGNING_ENDPOINT` over `BEARDOG_ADDRESS`)
+- 260 tests, 85.22% coverage, A+ grade
+
+---
+
+## [0.9.2] - 2025-12-23
+
+### Added
+- Core implementation: vertex content-addressing (BLAKE3), sessions, multi-parent DAG, topological sort
+- 21 tests passing
+
+---
+
+## [0.9.0] - 2025-12-20
+
+### Added
+- Initial project: specs, core types, DAG store trait, Merkle tree, slice semantics, dehydration, tarpc RPC, showcase demos
+
+---
+
+## Version History Summary
+
+- **0.14.0-dev** (2026-04-15 s43): Comprehensive audit — CRYPTO_MODEL spec, shared DiscoveryRegistry, METHOD_CATALOG single source of truth, 5 smart test-file refactors, doc refresh
+- **0.14.0-dev** (2026-04-13 s38–41): Handler domain split, metrics extraction, EventType reference, deny.toml tightening, doc reconciliation
+- **0.14.0-dev** (2026-04-07 s26): `dag.dehydrate` alias fix (blocking), `attested_at`→`witnessed_at` vocabulary, musl-static binary, Dockerfile Alpine, doc cleanup
+- **0.14.0-dev** (2026-04-02 s25): Comprehensive audit — tower 0.5, hashbrown→std, 78 clippy fixes, lock tightening, tarpc semantic fix, portability
+- **0.14.0-dev** (2026-04-01 s24): Lock-free CircuitBreaker, zero-sleep testing, Cow errors, OnceLock cache, dehydration evolution, +21 tests → 1,423
+- **0.14.0-dev** (2026-03-31 s23): RC-01 fix — UDS transport + dual-mode TCP + `biomeos` path migration + deep debt evolution, 1,402 tests
+- **0.13.0-dev** (2026-03-23 s19): MCP tools, DagBackend enum, GC sweeper, RedbDagStore wiring, 5 proptests, normalize_method, health alignment, debris cleanup, 1,412 tests
+- **0.13.0-dev** (2026-03-17 s18): Sovereignty — provenance-trio-types eliminated, wire types inlined, 14-crate ecoBin deny, 6 file extractions, cross-compile CI, RUSTSEC-2026-0049 fix
+- **0.13.0-dev** (2026-03-17 s17): Deep debt — health probes, 4-format capabilities, ValidationSink, JSON-RPC fuzz
+- **0.13.0-dev** (2026-03-16 s14): Deep debt — structured IPC errors, tarpc 0.37, capability domain introspection, NDJSON streaming, DI config, constant provenance, debris cleanup
+- **0.13.0-dev** (2026-03-16 s12): Deep audit — `#[expect]` migration (42 files), safe `TryFrom` casts, zero-copy signing, file refactoring, rustfmt edition sync
+- **0.13.0-dev** (2026-03-16 s11): Cross-ecosystem absorption — niche.rs, enhanced capability.list, temp-env, deploy fallback, CI coverage gate, deny unwrap/expect
+- **0.13.0-dev** (2026-03-15 s10): Edition 2024, deploy graph, capability registry, `#[expect]` lint migration
+- **0.13.0-dev** (2026-03-15 s8): O(1) vertex-to-session index, checkout_slice evolution, Did→Arc\<str\>, 907 tests
+- **0.13.0-dev** (2026-03-15 s7): scyBorg license, zero-copy signing, store_redb refactor, modern async traits, docs cleanup
+- **0.13.0-dev** (2026-03-14 s4): Sovereignty cleanup, 1075 tests, 91% coverage, doc tests rewritten, capability-based errors
+- **0.13.0-dev** (2026-03-14 s3): 90% coverage, 1022 tests, platform-agnostic transport, doctor subcommand, zero-copy handler
+- **0.13.0-dev** (2026-03-13): Deep debt, 862 tests, cargo-deny, service lib extraction
+- **0.13.0-dev** (2026-03-12): wateringHole standards, capability discovery, UniBin
+- **0.12.0** (2025-12-26): Lock-free concurrency (DashMap), Songbird registration
+- **0.10.0** (2025-12-24): Production ready, pure infant discovery, A+ grade
+- **0.9.2** (2025-12-23): Core implementation complete
+- **0.9.0** (2025-12-20): Initial release with specifications
+

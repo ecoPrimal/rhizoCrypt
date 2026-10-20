@@ -5,37 +5,22 @@
 //!
 //! This module contains the core types used by the Songbird client for
 //! service discovery, registration, and federation status.
+//!
+//! `ServiceInfo` is the canonical type from `cellmembrane-types`.
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
-/// Information about a discovered service.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServiceInfo {
-    /// Service identifier.
-    pub id: String,
+// ── Canonical re-export ──
+pub use cellmembrane_types::ecosystem::{ServiceInfo, ServiceStatus};
 
-    /// Service name.
-    pub name: String,
-
-    /// Service endpoint address.
-    pub endpoint: String,
-
-    /// Service capabilities.
-    pub capabilities: Vec<String>,
-
-    /// Service status.
-    pub status: String,
-
-    /// Optional metadata.
-    #[serde(default)]
-    pub metadata: HashMap<String, String>,
+/// Extension trait for `ServiceInfo` — rhizoCrypt convenience helpers.
+pub trait ServiceInfoExt {
+    /// Check if this service provides a specific capability.
+    fn has_capability(&self, cap: &str) -> bool;
 }
 
-impl ServiceInfo {
-    /// Check if this service provides a specific capability.
-    #[must_use]
-    pub fn has_capability(&self, cap: &str) -> bool {
+impl ServiceInfoExt for ServiceInfo {
+    fn has_capability(&self, cap: &str) -> bool {
         self.capabilities.iter().any(|c| c == cap)
     }
 }

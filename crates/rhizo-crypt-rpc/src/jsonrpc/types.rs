@@ -74,19 +74,8 @@ pub struct JsonRpcErrorResponse {
     pub id: Option<JsonRpcId>,
 }
 
-/// JSON-RPC 2.0 error object.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct JsonRpcError {
-    /// Standard error code.
-    pub code: i32,
-
-    /// Human-readable message.
-    pub message: String,
-
-    /// Optional additional data.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<Value>,
-}
+/// JSON-RPC 2.0 error object — canonical type from cellmembrane-types.
+pub use cellmembrane_types::JsonRpcError;
 
 /// Standard JSON-RPC 2.0 error codes.
 pub mod codes {

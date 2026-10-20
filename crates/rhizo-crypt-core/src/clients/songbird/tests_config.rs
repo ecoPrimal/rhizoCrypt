@@ -115,16 +115,12 @@ fn test_client_creation() {
 
 #[test]
 fn test_service_info_has_capability() {
-    use crate::clients::discovery_types::ServiceInfo;
+    use crate::clients::discovery_types::{ServiceInfo, ServiceInfoExt};
 
-    let service = ServiceInfo {
-        id: "test".to_string(),
-        name: "test".to_string(),
-        endpoint: "127.0.0.1:9000".to_string(),
-        capabilities: vec!["signing".to_string(), "did".to_string()],
-        status: "healthy".to_string(),
-        metadata: HashMap::new(),
-    };
+    let service = ServiceInfo::new("test", "test")
+        .with_endpoint("127.0.0.1:9000")
+        .with_capability("signing")
+        .with_capability("did");
 
     assert!(service.has_capability("signing"));
     assert!(service.has_capability("did"));
@@ -135,18 +131,11 @@ fn test_service_info_has_capability() {
 fn test_service_info_metadata() {
     use crate::clients::discovery_types::ServiceInfo;
 
-    let mut metadata = HashMap::new();
-    metadata.insert("version".to_string(), "1.0.0".to_string());
-    metadata.insert("region".to_string(), "us-west".to_string());
-
-    let service = ServiceInfo {
-        id: "test".to_string(),
-        name: "test-service".to_string(),
-        endpoint: "10.0.0.1:9000".to_string(),
-        capabilities: vec!["signing".to_string()],
-        status: "healthy".to_string(),
-        metadata: metadata.clone(),
-    };
+    let mut service = ServiceInfo::new("test", "test-service")
+        .with_endpoint("10.0.0.1:9000")
+        .with_capability("signing");
+    service.metadata.insert("version".to_string(), "1.0.0".to_string());
+    service.metadata.insert("region".to_string(), "us-west".to_string());
 
     assert_eq!(service.metadata.len(), 2);
     assert_eq!(service.metadata.get("version"), Some(&"1.0.0".to_string()));

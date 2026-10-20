@@ -71,5 +71,7 @@ pub use adapters::{AdapterFactory, ProtocolAdapter};
 pub use factory::CapabilityClientFactory;
 
 // Bootstrap/discovery — capability-neutral public API
-pub use discovery_types::{ClientState, FederationStatus, RegistrationResult, ServiceInfo};
+pub use discovery_types::{
+    ClientState, FederationStatus, RegistrationResult, ServiceInfo, ServiceInfoExt, ServiceStatus,
+};
 pub use songbird::{DiscoveryClient, DiscoveryConfig};

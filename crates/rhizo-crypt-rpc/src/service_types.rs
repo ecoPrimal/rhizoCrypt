@@ -234,6 +234,12 @@ pub struct CheckoutSliceRequest {
 }
 
 /// Health status response.
+///
+/// Kept local (not wired to canonical `cellmembrane_types::HealthStatus`) because
+/// this type is sent over tarpc/bincode transport. The canonical HealthStatus uses
+/// `HashMap<String, serde_json::Value>` in its `details` field, which is
+/// incompatible with bincode serialization (`serde_json::Value` enum tags
+/// are not bincode-encodable).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HealthStatus {
     /// Whether the service is healthy.

@@ -28,6 +28,7 @@ live-clients = ["dep:tarpc", "dep:futures-util", "dep:bincode", "http-clients"]
 workspace = true
 
 [dependencies]
+cellmembrane-types = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

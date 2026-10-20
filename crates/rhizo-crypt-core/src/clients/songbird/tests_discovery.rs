@@ -4,9 +4,8 @@
 //! Discovery, cache, and registry population tests for Songbird client.
 
 use super::{DiscoveryClient, DiscoveryConfig};
-use crate::clients::discovery_types::{ClientState, ServiceInfo};
+use crate::clients::discovery_types::{ClientState, ServiceInfo, ServiceInfoExt};
 use crate::discovery::{Capability, DiscoveryRegistry};
-use std::collections::HashMap;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_discover_without_connection() {
@@ -22,14 +21,11 @@ async fn test_cache_operations() {
     let client = DiscoveryClient::new(config);
     *client.state.write().await = ClientState::Connected;
 
-    let services = vec![ServiceInfo {
-        id: "test-1".to_string(),
-        name: "test-beardog".to_string(),
-        endpoint: "127.0.0.1:9000".to_string(),
-        capabilities: vec!["signing".to_string()],
-        status: "healthy".to_string(),
-        metadata: HashMap::new(),
-    }];
+    let services = vec![
+        ServiceInfo::new("test-1", "test-beardog")
+            .with_endpoint("127.0.0.1:9000")
+            .with_capability("signing"),
+    ];
 
     client.cache_discovery("signing", services.clone()).await;
 
@@ -51,14 +47,11 @@ async fn test_populate_registry() {
     client
         .cache_discovery(
             "signing",
-            vec![ServiceInfo {
-                id: "crypto-1".to_string(),
-                name: "crypto-primary".to_string(),
-                endpoint: "127.0.0.1:9500".to_string(),
-                capabilities: vec!["signing".to_string()],
-                status: "healthy".to_string(),
-                metadata: HashMap::new(),
-            }],
+            vec![
+                ServiceInfo::new("crypto-1", "crypto-primary")
+                    .with_endpoint("127.0.0.1:9500")
+                    .with_capability("signing"),
+            ],
         )
         .await;
 
@@ -77,14 +70,12 @@ async fn test_discover_specific_primal() {
     client
         .cache_discovery(
             "signing",
-            vec![ServiceInfo {
-                id: "crypto-1".to_string(),
-                name: "crypto-primary".to_string(),
-                endpoint: "127.0.0.1:9500".to_string(),
-                capabilities: vec!["signing".to_string(), "did-verification".to_string()],
-                status: "healthy".to_string(),
-                metadata: HashMap::new(),
-            }],
+            vec![
+                ServiceInfo::new("crypto-1", "crypto-primary")
+                    .with_endpoint("127.0.0.1:9500")
+                    .with_capability("signing")
+                    .with_capability("did-verification"),
+            ],
         )
         .await;
 
@@ -102,14 +93,11 @@ async fn test_discover_permanent_storage_provider() {
     client
         .cache_discovery(
             "permanent-storage",
-            vec![ServiceInfo {
-                id: "storage-1".to_string(),
-                name: "permanent-storage-main".to_string(),
-                endpoint: "127.0.0.1:9600".to_string(),
-                capabilities: vec!["permanent-storage".to_string()],
-                status: "healthy".to_string(),
-                metadata: HashMap::new(),
-            }],
+            vec![
+                ServiceInfo::new("storage-1", "permanent-storage-main")
+                    .with_endpoint("127.0.0.1:9600")
+                    .with_capability("permanent-storage"),
+            ],
         )
         .await;
 
@@ -127,14 +115,11 @@ async fn test_discover_payload_storage_provider() {
     client
         .cache_discovery(
             "payload-storage",
-            vec![ServiceInfo {
-                id: "payload-1".to_string(),
-                name: "payload-storage-main".to_string(),
-                endpoint: "127.0.0.1:9700".to_string(),
-                capabilities: vec!["payload-storage".to_string()],
-                status: "healthy".to_string(),
-                metadata: HashMap::new(),
-            }],
+            vec![
+                ServiceInfo::new("payload-1", "payload-storage-main")
+                    .with_endpoint("127.0.0.1:9700")
+                    .with_capability("payload-storage"),
+            ],
         )
         .await;
 
@@ -175,42 +160,33 @@ async fn test_populate_registry_with_services() {
     client
         .cache_discovery(
             "signing",
-            vec![ServiceInfo {
-                id: "crypto-1".to_string(),
-                name: "crypto-provider".to_string(),
-                endpoint: "127.0.0.1:9500".to_string(),
-                capabilities: vec!["signing".to_string()],
-                status: "healthy".to_string(),
-                metadata: HashMap::new(),
-            }],
+            vec![
+                ServiceInfo::new("crypto-1", "crypto-provider")
+                    .with_endpoint("127.0.0.1:9500")
+                    .with_capability("signing"),
+            ],
         )
         .await;
 
     client
         .cache_discovery(
             "permanent-storage",
-            vec![ServiceInfo {
-                id: "ledger-1".to_string(),
-                name: "ledger-provider".to_string(),
-                endpoint: "127.0.0.1:9600".to_string(),
-                capabilities: vec!["permanent-storage".to_string()],
-                status: "healthy".to_string(),
-                metadata: HashMap::new(),
-            }],
+            vec![
+                ServiceInfo::new("ledger-1", "ledger-provider")
+                    .with_endpoint("127.0.0.1:9600")
+                    .with_capability("permanent-storage"),
+            ],
         )
         .await;
 
     client
         .cache_discovery(
             "payload-storage",
-            vec![ServiceInfo {
-                id: "storage-1".to_string(),
-                name: "storage-provider".to_string(),
-                endpoint: "127.0.0.1:9700".to_string(),
-                capabilities: vec!["payload-storage".to_string()],
-                status: "healthy".to_string(),
-                metadata: HashMap::new(),
-            }],
+            vec![
+                ServiceInfo::new("storage-1", "storage-provider")
+                    .with_endpoint("127.0.0.1:9700")
+                    .with_capability("payload-storage"),
+            ],
         )
         .await;
 
@@ -232,14 +208,11 @@ async fn test_cache_invalidation() {
     client
         .cache_discovery(
             "signing",
-            vec![ServiceInfo {
-                id: "test".to_string(),
-                name: "test".to_string(),
-                endpoint: "127.0.0.1:9000".to_string(),
-                capabilities: vec!["signing".to_string()],
-                status: "healthy".to_string(),
-                metadata: HashMap::new(),
-            }],
+            vec![
+                ServiceInfo::new("test", "test")
+                    .with_endpoint("127.0.0.1:9000")
+                    .with_capability("signing"),
+            ],
         )
         .await;
 
@@ -261,18 +234,13 @@ async fn test_multiple_capability_discovery() {
     client
         .cache_discovery(
             "multi-capability",
-            vec![ServiceInfo {
-                id: "multi-1".to_string(),
-                name: "multi-service".to_string(),
-                endpoint: "127.0.0.1:9000".to_string(),
-                capabilities: vec![
-                    "signing".to_string(),
-                    "did-verification".to_string(),
-                    "key-management".to_string(),
-                ],
-                status: "healthy".to_string(),
-                metadata: HashMap::new(),
-            }],
+            vec![
+                ServiceInfo::new("multi-1", "multi-service")
+                    .with_endpoint("127.0.0.1:9000")
+                    .with_capability("signing")
+                    .with_capability("did-verification")
+                    .with_capability("key-management"),
+            ],
         )
         .await;
 
@@ -293,14 +261,11 @@ async fn test_populate_registry_skips_invalid_endpoint() {
     client
         .cache_discovery(
             "signing",
-            vec![ServiceInfo {
-                id: "bad-1".to_string(),
-                name: "bad-endpoint".to_string(),
-                endpoint: "not-a-valid-address".to_string(),
-                capabilities: vec!["signing".to_string()],
-                status: "healthy".to_string(),
-                metadata: HashMap::new(),
-            }],
+            vec![
+                ServiceInfo::new("bad-1", "bad-endpoint")
+                    .with_endpoint("not-a-valid-address")
+                    .with_capability("signing"),
+            ],
         )
         .await;
 

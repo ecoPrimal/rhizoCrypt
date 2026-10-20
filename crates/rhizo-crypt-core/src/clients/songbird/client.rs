@@ -42,9 +42,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::error::{Result, RhizoCryptError};
 
-use super::super::discovery_types::{
-    ClientState, FederationStatus, RegistrationResult, ServiceInfo,
-};
+use super::super::discovery_types::{ClientState, FederationStatus, RegistrationResult, ServiceInfo};
 use super::config::DiscoveryConfig;
 
 #[cfg(feature = "live-clients")]

@@ -45,16 +45,24 @@ impl DiscoveryClient {
                     .await
                     .map_err(|e| RhizoCryptError::integration(format!("tarpc error: {e}")))?;
 
-                // Convert RpcServiceInfo to ServiceInfo
+                // Convert RpcServiceInfo to ServiceInfo (canonical)
+                use super::super::discovery_types::ServiceStatus;
                 let services: Vec<ServiceInfo> = rpc_services
                     .into_iter()
-                    .map(|s| ServiceInfo {
-                        id: s.id,
-                        name: s.capability.clone(),
-                        endpoint: s.endpoint,
-                        capabilities: vec![s.capability],
-                        status: s.status,
-                        metadata: std::collections::HashMap::new(),
+                    .map(|s| {
+                        let status = match s.status.as_str() {
+                            "running" | "healthy" | "active" => ServiceStatus::Running,
+                            "starting" => ServiceStatus::Starting,
+                            "stopped" => ServiceStatus::Stopped,
+                            "degraded" => ServiceStatus::Degraded,
+                            "error" => ServiceStatus::Error,
+                            _ => ServiceStatus::Unknown,
+                        };
+                        let mut info = ServiceInfo::new(s.id, s.capability.clone())
+                            .with_endpoint(s.endpoint)
+                            .with_capability(s.capability);
+                        info.status = status;
+                        info
                     })
                     .collect();
 
@@ -140,9 +148,13 @@ impl DiscoveryClient {
 
         for (domain, capabilities) in capability_mappings {
             for service in self.discover(domain).await? {
-                let Some(ep) = TransportEndpoint::try_parse_address(&service.endpoint) else {
+                let Some(ep_str) = service.endpoints.first() else {
+                    tracing::debug!(name = %service.name, "Skipping service with no endpoints");
+                    continue;
+                };
+                let Some(ep) = TransportEndpoint::try_parse_address(ep_str) else {
                     tracing::debug!(
-                        endpoint = %service.endpoint,
+                        endpoint = %ep_str,
                         "Skipping service with unparseable endpoint"
                     );
                     continue;

@@ -79,7 +79,7 @@ async fn tarpc_discover_signing() {
     let services = client.discover("signing").await.unwrap();
     assert_eq!(services.len(), 1);
     assert_eq!(services[0].id, "mock-signing-1");
-    assert_eq!(services[0].endpoint, "127.0.0.1:9500");
+    assert_eq!(services[0].endpoints.first().map(String::as_str), Some("127.0.0.1:9500"));
 }
 
 #[cfg(feature = "live-clients")]
@@ -147,5 +147,5 @@ async fn tarpc_register_then_discover_signing_provider() {
 
     let signer = client.discover_signing_provider().await.unwrap();
     assert!(signer.is_some());
-    assert_eq!(signer.unwrap().endpoint, "127.0.0.1:9500");
+    assert_eq!(signer.unwrap().endpoints.first().map(String::as_str), Some("127.0.0.1:9500"));
 }
